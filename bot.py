@@ -1,5 +1,5 @@
 # Botê Analîzê yê Grupê - Badini Kürtçesi
-# Komutlar: /start, /admin, /report, /reload
+# Komutlar: /start, /rapor (admin), /reload (admin)
 
 import os
 import json
@@ -44,7 +44,6 @@ class BadiniMessages:
     THIRD = "سێیەم"
     
     # Komutlar
-    ADMIN_LIST = "👮 لیستا ئەدمینان"
     REPORT = "📋 راپور"
     RELOAD = "🔄 بارکرن دوبارە"
     
@@ -308,7 +307,9 @@ class BadiniAnalizBot:
                     chat_id=GROUP_ID,
                     text=f"✅ **{self.msgs.BOT_NAME}**\n"
                          f"👮 {len(admin_dict)} ئەدمین هاتنە ناسین\n"
-                         f"📊 24 سعەت رەپورت هەر شەڤ دێ هاتە"
+                         f"📊 24 سعەت رەپورت هەر شەڤ دێ هاتە\n"
+                         f"📋 {self.msgs.REPORT} - تەنێ بو ئەدمینان\n"
+                         f"🔄 {self.msgs.RELOAD} - تەنێ بو ئەدمینان"
                 )
             
         except Exception as e:
@@ -321,38 +322,47 @@ class BadiniAnalizBot:
             f"**{self.msgs.BOT_NAME}**\n\n"
             f"📊 داتایێن 24 سعەت و حەڤتیێ\n"
             f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
-            f"👮 ئەدمین: {self.msgs.ADMIN_LIST}\n"
-            f"📋 راپور: {self.msgs.REPORT}\n"
-            f"🔄 تازەکرن: {self.msgs.RELOAD}"
+            f"📋 {self.msgs.REPORT} - تەنێ بو ئەدمینان\n"
+            f"🔄 {self.msgs.RELOAD} - تەنێ بو ئەدمینان"
         )
     
-    async def admin_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """/admin komutu - admin listesi"""
-        if not self.db.is_admin(update.effective_user.id):
-            await update.message.reply_text(self.msgs.NOT_ADMIN)
-            return
-        
-        admins = self.db.get_admins()
-        msg = f"**{self.msgs.ADMIN_LIST}**\n\n"
-        
-        for admin_id, admin_data in admins.items():
-            role = "👑" if admin_data.get('is_owner') else "👮"
-            name = admin_data.get('username', admin_data.get('first_name', '?'))
-            msg += f"{role} {name}\n"
-        
-        await update.message.reply_text(msg)
-    
-    async def report_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """/report komutu - anlık rapor"""
+    async def rapor_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """/rapor komutu - SADECE ADMINLER İÇİN"""
+        # Admin mi kontrol et
         if not self.db.is_admin(update.effective_user.id):
             await update.message.reply_text(self.msgs.NOT_ADMIN)
             return
         
         await update.message.reply_text(self.msgs.REPORT_PREPARING)
-        await self.send_daily_report(context)
+        
+        # Genel raporu hazırla
+        top_user_24h = self.db.get_top_users(24)
+        top_user_12h = self.db.get_top_users(12)
+        inactive = self.db.get_inactive_users_24h()
+        
+        msg = f"**📊 {self.msgs.REPORT_24H}**\n\n"
+        
+        # Genel istatistikler
+        if top_user_24h:
+            username_top, count = top_user_24h
+            msg += f"**🏆 {self.msgs.TOP_MESSAGERS} (24h):**\n"
+            msg += f"👑 {username_top} - {count} {self.msgs.MESSAGE}\n\n"
+        
+        if top_user_12h:
+            username_top, count = top_user_12h
+            msg += f"**🥇 {self.msgs.TOP_MESSAGERS} (12h):**\n"
+            msg += f"👑 {username_top} - {count} {self.msgs.MESSAGE}\n\n"
+        
+        # Pasif kullanıcılar
+        if inactive:
+            msg += f"**💤 {self.msgs.INACTIVE_24H}**\n"
+            for username_inactive in inactive[:10]:
+                msg += f"• {username_inactive}\n"
+        
+        await update.message.reply_text(msg)
     
     async def reload_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """/reload komutu - admin listesini yeniden yükle"""
+        """/reload komutu - sadece adminler için"""
         if not self.db.is_admin(update.effective_user.id):
             await update.message.reply_text(self.msgs.NOT_ADMIN)
             return
@@ -373,7 +383,7 @@ class BadiniAnalizBot:
         self.db.add_message(user.id, user.username, user.first_name)
     
     async def send_daily_report(self, context):
-        """Günlük rapor gönder"""
+        """Günlük rapor gönder (otomatik)"""
         if not GROUP_ID:
             return
         
@@ -458,9 +468,8 @@ class BadiniAnalizBot:
         
         # Komutlar
         application.add_handler(CommandHandler("start", self.start_command))
-        application.add_handler(CommandHandler("admin", self.admin_command))
-        application.add_handler(CommandHandler("report", self.report_command))
-        application.add_handler(CommandHandler("reload", self.reload_command))
+        application.add_handler(CommandHandler("rapor", self.rapor_command))  # SADECE ADMIN - TÜRKÇE KOMUT
+        application.add_handler(CommandHandler("reload", self.reload_command))  # SADECE ADMIN
         
         # Mesaj handler
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
@@ -502,7 +511,7 @@ class BadiniAnalizBot:
         
         print(f"🚀 {self.msgs.BOT_NAME} başladı...")
         print(f"📊 Grup ID: {GROUP_ID}")
-        print(f"📋 Komutlar: /start, /admin, /report, /reload")
+        print(f"📋 Komutlar: /start (herkese açık), /rapor (sadece admin), /reload (sadece admin)")
         application.run_polling()
 
 
