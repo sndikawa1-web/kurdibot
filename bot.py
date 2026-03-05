@@ -28,7 +28,7 @@ class BadiniMessages:
     REPORT_WEEKLY = "📈 داتایێن حەڤتیێ"
     ACTIVE_USERS = "👥 ئەندامێن اکتیڤ"
     INACTIVE_USERS = "💤 ئەندامێن نە اکتیڤ"
-    TOP_MESSAGERS = "🏆 ئەو کەسێن گەلەك نامە رێکرین"
+    TOP_MESSAGERS = "🏆 لیستا نامەیان"
     
     # Eksi Sistemi
     PENALTY = "⚠️ جزا"
@@ -40,7 +40,7 @@ class BadiniMessages:
     # İstatistik
     MESSAGE = "نامە"
     MEMBER = "ئەندام"
-    TOTAL = "توتال"
+    TOTAL = "کۆ"
     RANKING = "رێزبەندی"
     FIRST = "ێکەم"
     SECOND = "دویەم"
@@ -69,6 +69,7 @@ class BadiniMessages:
     RESET_PENALTY = "🔄 ب هنارتنا نامەکێ بو گروبی جزایێن خو ژێببە"
     WEEKLY_TOP = "👑 ئەندامێ د حەڤتیێ دا ژ هەمیان اکتیڤتر:"
     TODAY_STATS = "📊 ئەفروکە {} هندە نامە هاتن"
+    MESSAGE_LIST = "📝 لیستا نامەیان:"
     
     # Admin Mesajları
     NOT_ADMIN = "⛔ تە دەستوری ئەمە نینە!"
@@ -219,32 +220,35 @@ class Database:
         
         return inactive
     
-    def get_top_users(self, hours):
+    def get_all_users_message_counts_24h(self):
+        """Son 24 saatte tüm kullanıcıların mesaj sayılarını getir"""
         with open(self.messages_file, 'r', encoding='utf-8') as f:
             messages = json.load(f)
         
         with open(self.users_file, 'r', encoding='utf-8') as f:
             users = json.load(f)
         
-        since_date = (datetime.now(IRAQ_TZ) - timedelta(hours=hours)).date()
+        since_date = (datetime.now(IRAQ_TZ) - timedelta(hours=24)).date()
         
         user_counts = {}
         for date_str, daily_msgs in messages.items():
             msg_date = datetime.strptime(date_str, "%Y-%m-%d").date()
             if msg_date >= since_date:
                 for user_id, count in daily_msgs.items():
-                    user_counts[user_id] = user_counts.get(user_id, 0) + count
+                    if count > 0:  # Sadece mesaj gönderenleri al
+                        user_counts[user_id] = user_counts.get(user_id, 0) + count
         
-        if not user_counts:
-            return None
+        # Kullanıcı adlarıyla birlikte listele
+        result = []
+        for user_id, count in user_counts.items():
+            user_data = users.get(user_id, {})
+            username = user_data.get('username', user_data.get('first_name', 'Bilinmiyor'))
+            result.append((username, count))
         
-        top_user_id = max(user_counts, key=user_counts.get)
-        top_count = user_counts[top_user_id]
+        # Mesaj sayısına göre sırala (çoktan aza)
+        result.sort(key=lambda x: x[1], reverse=True)
         
-        user_data = users.get(top_user_id, {})
-        username = user_data.get('username', user_data.get('first_name', 'Bilinmiyor'))
-        
-        return (username, top_count)
+        return result
 
 
 # ==================== ANA BOT ====================
@@ -364,30 +368,36 @@ class BadiniAnalizBot:
         
         await update.message.reply_text(self.msgs.REPORT_PREPARING)
         
-        # Genel raporu hazırla
-        top_user_24h = self.db.get_top_users(24)
-        top_user_12h = self.db.get_top_users(12)
+        # Tüm kullanıcıların mesaj sayılarını al
+        all_users = self.db.get_all_users_message_counts_24h()
         inactive = self.db.get_inactive_users_24h()
         
+        now = datetime.now(IRAQ_TZ)
         msg = f"**📊 {self.msgs.REPORT_24H}**\n\n"
-        msg += f"⏰ **کاتی عێراق:** {datetime.now(IRAQ_TZ).strftime('%H:%M')}\n\n"
+        msg += f"⏰ **کاتی عێراق:** {now.strftime('%Y-%m-%d %H:%M')}\n\n"
         
-        # Genel istatistikler
-        if top_user_24h:
-            username_top, count = top_user_24h
-            msg += f"**🏆 {self.msgs.TOP_MESSAGERS} (24h):**\n"
-            msg += f"👑 {username_top} - {count} {self.msgs.MESSAGE}\n\n"
-        
-        if top_user_12h:
-            username_top, count = top_user_12h
-            msg += f"**🥇 {self.msgs.TOP_MESSAGERS} (12h):**\n"
-            msg += f"👑 {username_top} - {count} {self.msgs.MESSAGE}\n\n"
+        if all_users:
+            msg += f"**📝 {self.msgs.MESSAGE_LIST}**\n"
+            for i, (username, count) in enumerate(all_users, 1):
+                if i == 1:
+                    medal = "🥇"
+                elif i == 2:
+                    medal = "🥈"
+                elif i == 3:
+                    medal = "🥉"
+                else:
+                    medal = "📌"
+                msg += f"{medal} **{username}** - {count} {self.msgs.MESSAGE}\n"
+            
+            msg += f"\n📊 **{self.msgs.TOTAL}:** {len(all_users)} {self.msgs.MEMBER}\n\n"
+        else:
+            msg += f"{self.msgs.NO_MESSAGES}\n\n"
         
         # Pasif kullanıcılar
         if inactive:
             msg += f"**💤 {self.msgs.INACTIVE_24H}**\n"
-            for username_inactive in inactive[:10]:
-                msg += f"• {username_inactive}\n"
+            for username in inactive[:10]:
+                msg += f"• {username}\n"
         
         await update.message.reply_text(msg)
     
@@ -431,23 +441,31 @@ class BadiniAnalizBot:
         
         now = datetime.now(IRAQ_TZ)
         
-        top_user_24h = self.db.get_top_users(24)
-        top_user_12h = self.db.get_top_users(12)
+        # Tüm kullanıcıların mesaj sayılarını al
+        all_users = self.db.get_all_users_message_counts_24h()
         inactive = self.db.get_inactive_users_24h()
         
         msg = f"**📊 {self.msgs.REPORT_24H}**\n\n"
         msg += f"⏰ **کاتی عێراق:** {now.strftime('%Y-%m-%d %H:%M')}\n\n"
         
-        if top_user_24h:
-            username, count = top_user_24h
-            msg += f"**🏆 {self.msgs.TOP_MESSAGERS} (24h):**\n"
-            msg += f"👑 {username} - {count} {self.msgs.MESSAGE}\n\n"
+        if all_users:
+            msg += f"**📝 {self.msgs.MESSAGE_LIST}**\n"
+            for i, (username, count) in enumerate(all_users, 1):
+                if i == 1:
+                    medal = "🥇"
+                elif i == 2:
+                    medal = "🥈"
+                elif i == 3:
+                    medal = "🥉"
+                else:
+                    medal = "📌"
+                msg += f"{medal} **{username}** - {count} {self.msgs.MESSAGE}\n"
+            
+            msg += f"\n📊 **{self.msgs.TOTAL}:** {len(all_users)} {self.msgs.MEMBER}\n\n"
+        else:
+            msg += f"{self.msgs.NO_MESSAGES}\n\n"
         
-        if top_user_12h:
-            username, count = top_user_12h
-            msg += f"**🥇 {self.msgs.TOP_MESSAGERS} (12h):**\n"
-            msg += f"👑 {username} - {count} {self.msgs.MESSAGE}\n\n"
-        
+        # Pasif kullanıcılar
         if inactive:
             msg += f"**💤 {self.msgs.INACTIVE_24H}**\n"
             for username in inactive[:10]:
@@ -464,15 +482,14 @@ class BadiniAnalizBot:
             return
         
         now = datetime.now(IRAQ_TZ)
-        top_weekly = self.db.get_top_users(168)
+        all_users = self.db.get_all_users_message_counts_24h()  # 24 saatlik
         
         msg = f"**📈 {self.msgs.REPORT_WEEKLY}**\n\n"
         msg += f"⏰ **کاتی عێراق:** {now.strftime('%Y-%m-%d %H:%M')}\n\n"
         
-        if top_weekly:
-            username, count = top_weekly
-            msg += f"**👑 {self.msgs.WEEKLY_TOP}**\n"
-            msg += f"**{username}** - {count} {self.msgs.MESSAGE}\n\n"
+        if all_users:
+            msg += f"**👑 {self.msgs.MOST_ACTIVE}**\n"
+            msg += f"**{all_users[0][0]}** - {all_users[0][1]} {self.msgs.MESSAGE}\n\n"
         
         penalties = self.db.get_users_with_3_penalties()
         if penalties:
