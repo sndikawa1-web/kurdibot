@@ -1,5 +1,5 @@
 # Botê Analîzê yê Grupê - Badini Kürtçesi
-# Sadece belirli grupta çalışır, Irak saatine göre gece 12:00'de rapor
+# Irak saati doğru gösterir (UTC+3)
 
 import os
 import json
@@ -12,7 +12,7 @@ from telegram.ext import Application, MessageHandler, filters, CommandHandler, C
 TOKEN = os.environ.get('BOT_TOKEN')
 GROUP_ID = int(os.environ.get('GROUP_ID', 0))  # Senin grup ID'n
 
-# Irak Saati (UTC+3)
+# Irak Saati (UTC+3) - DOĞRU AYAR
 IRAQ_TZ = timezone(timedelta(hours=3))
 
 # Loglama
@@ -119,8 +119,9 @@ class Database:
             users = json.load(f)
         
         users[user_id_str] = {
-            'username': username or first_name,
+            'username': username,
             'first_name': first_name,
+            'user_id': user_id,
             'last_seen': datetime.now(IRAQ_TZ).isoformat()
         }
         
@@ -197,8 +198,12 @@ class Database:
                 continue
             if penalty_data.get('count', 0) >= 3:
                 user_data = users.get(user_id, {})
-                username = user_data.get('username', user_data.get('first_name', 'Bilinmiyor'))
-                result.append((user_id, username))
+                username = user_data.get('username')
+                user_id_int = user_data.get('user_id')
+                if username:
+                    result.append((user_id_int, f"@{username}"))
+                else:
+                    result.append((user_id_int, user_data.get('first_name', 'Bilinmiyor')))
         
         return result
     
@@ -215,13 +220,16 @@ class Database:
                 continue
             last_seen = datetime.fromisoformat(user_data.get('last_seen', '2000-01-01'))
             if last_seen < one_day_ago:
-                username = user_data.get('username', user_data.get('first_name', 'Bilinmiyor'))
-                inactive.append(username)
+                username = user_data.get('username')
+                if username:
+                    inactive.append(f"@{username}")
+                else:
+                    inactive.append(user_data.get('first_name', 'Bilinmiyor'))
         
         return inactive
     
     def get_all_users_message_counts_24h(self):
-        """Son 24 saatte tüm kullanıcıların mesaj sayılarını getir"""
+        """Son 24 saatte tüm kullanıcıların mesaj sayılarını getir (etiketli)"""
         with open(self.messages_file, 'r', encoding='utf-8') as f:
             messages = json.load(f)
         
@@ -235,15 +243,19 @@ class Database:
             msg_date = datetime.strptime(date_str, "%Y-%m-%d").date()
             if msg_date >= since_date:
                 for user_id, count in daily_msgs.items():
-                    if count > 0:  # Sadece mesaj gönderenleri al
+                    if count > 0:
                         user_counts[user_id] = user_counts.get(user_id, 0) + count
         
-        # Kullanıcı adlarıyla birlikte listele
+        # Kullanıcı adlarıyla birlikte listele (etiketli)
         result = []
         for user_id, count in user_counts.items():
             user_data = users.get(user_id, {})
-            username = user_data.get('username', user_data.get('first_name', 'Bilinmiyor'))
-            result.append((username, count))
+            username = user_data.get('username')
+            if username:
+                display_name = f"@{username}"
+            else:
+                display_name = user_data.get('first_name', 'Bilinmiyor')
+            result.append((display_name, count, user_id))
         
         # Mesaj sayısına göre sırala (çoktan aza)
         result.sort(key=lambda x: x[1], reverse=True)
@@ -302,8 +314,9 @@ class BadiniAnalizBot:
             for admin in admins:
                 user = admin.user
                 admin_dict[str(user.id)] = {
-                    'username': user.username or user.first_name,
+                    'username': user.username,
                     'first_name': user.first_name,
+                    'user_id': user.id,
                     'is_owner': admin.status == 'creator'
                 }
             
@@ -321,7 +334,7 @@ class BadiniAnalizBot:
                          f"📊 24 سعەت رەپورت هەر شەڤ دێ هاتە\n"
                          f"📋 {self.msgs.REPORT} - تەنێ بو ئەدمینان\n"
                          f"🔄 {self.msgs.RELOAD} - تەنێ بو ئەدمینان\n\n"
-                         f"⏰ کاتی عێراق: 12:00 شەڤ"
+                         f"⏰ کاتی عێراق: {datetime.now(IRAQ_TZ).strftime('%H:%M')}"
                 )
             
         except Exception as e:
@@ -339,6 +352,7 @@ class BadiniAnalizBot:
             await update.message.reply_text(self.msgs.WRONG_GROUP_ERROR)
             return
         
+        now = datetime.now(IRAQ_TZ)
         await update.message.reply_text(
             f"👋 {self.msgs.WELCOME}\n\n"
             f"{self.msgs.BOT_NAME}\n\n"
@@ -346,7 +360,7 @@ class BadiniAnalizBot:
             f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
             f"📋 {self.msgs.REPORT} - تەنێ بو ئەدمینان\n"
             f"🔄 {self.msgs.RELOAD} - تەنێ بو ئەدمینان\n\n"
-            f"⏰ کاتی عێراق: 12:00 شەڤ"
+            f"⏰ کاتی عێراق: {now.strftime('%H:%M')}"
         )
     
     async def rapor_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -368,7 +382,7 @@ class BadiniAnalizBot:
         
         await update.message.reply_text(self.msgs.REPORT_PREPARING)
         
-        # Tüm kullanıcıların mesaj sayılarını al
+        # Tüm kullanıcıların mesaj sayılarını al (etiketli)
         all_users = self.db.get_all_users_message_counts_24h()
         inactive = self.db.get_inactive_users_24h()
         
@@ -378,7 +392,7 @@ class BadiniAnalizBot:
         
         if all_users:
             msg += f"📝 {self.msgs.MESSAGE_LIST}\n"
-            for i, (username, count) in enumerate(all_users, 1):
+            for i, (display_name, count, user_id) in enumerate(all_users, 1):
                 if i == 1:
                     medal = "🥇"
                 elif i == 2:
@@ -387,13 +401,13 @@ class BadiniAnalizBot:
                     medal = "🥉"
                 else:
                     medal = "📌"
-                msg += f"{medal} {username} - {count} {self.msgs.MESSAGE}\n"
+                msg += f"{medal} {display_name} - {count} {self.msgs.MESSAGE}\n"
             
             msg += f"\n📊 {self.msgs.TOTAL}: {len(all_users)} {self.msgs.MEMBER}\n\n"
         else:
             msg += f"{self.msgs.NO_MESSAGES}\n\n"
         
-        # Pasif kullanıcılar
+        # Pasif kullanıcılar (etiketli)
         if inactive:
             msg += f"💤 {self.msgs.INACTIVE_24H}\n"
             for username in inactive[:10]:
@@ -441,7 +455,7 @@ class BadiniAnalizBot:
         
         now = datetime.now(IRAQ_TZ)
         
-        # Tüm kullanıcıların mesaj sayılarını al
+        # Tüm kullanıcıların mesaj sayılarını al (etiketli)
         all_users = self.db.get_all_users_message_counts_24h()
         inactive = self.db.get_inactive_users_24h()
         
@@ -450,7 +464,7 @@ class BadiniAnalizBot:
         
         if all_users:
             msg += f"📝 {self.msgs.MESSAGE_LIST}\n"
-            for i, (username, count) in enumerate(all_users, 1):
+            for i, (display_name, count, user_id) in enumerate(all_users, 1):
                 if i == 1:
                     medal = "🥇"
                 elif i == 2:
@@ -459,13 +473,13 @@ class BadiniAnalizBot:
                     medal = "🥉"
                 else:
                     medal = "📌"
-                msg += f"{medal} {username} - {count} {self.msgs.MESSAGE}\n"
+                msg += f"{medal} {display_name} - {count} {self.msgs.MESSAGE}\n"
             
             msg += f"\n📊 {self.msgs.TOTAL}: {len(all_users)} {self.msgs.MEMBER}\n\n"
         else:
             msg += f"{self.msgs.NO_MESSAGES}\n\n"
         
-        # Pasif kullanıcılar
+        # Pasif kullanıcılar (etiketli)
         if inactive:
             msg += f"💤 {self.msgs.INACTIVE_24H}\n"
             for username in inactive[:10]:
