@@ -2,21 +2,16 @@ import os
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from translate import Translator
+from googletrans import Translator
 
 # Token'ı environment variable'dan al
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
-# Loglama
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Çeviri yapıcı
+translator = Translator()
 
-# Dil çevirileri için yardımcı fonksiyon
-def ceviri_yap(text, hedef_dil):
-    try:
-        translator = Translator(to_lang=hedef_dil)
-        return translator.translate(text)
-    except:
-        return None
+# Loglama
+logging.basicConfig(format='%(asname)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 # /start komutu
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -72,19 +67,16 @@ async def buton_tiklandi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         # Çeviriyi yap
-        ceviri = ceviri_yap(orijinal_mesaj, secilen_dil)
+        ceviri = translator.translate(orijinal_mesaj, dest=secilen_dil)
         
-        if ceviri:
-            # Sonucu gönder
-            await query.edit_message_text(
-                f"👤 **{mesaj_sahibi}**: {orijinal_mesaj}\n\n"
-                f"📖 **{dil_adi}**: {ceviri}"
-            )
-        else:
-            await query.edit_message_text("❌ Çeviri başarısız oldu.")
+        # Sonucu gönder
+        await query.edit_message_text(
+            f"👤 **{mesaj_sahibi}**: {orijinal_mesaj}\n\n"
+            f"📖 **{dil_adi}**: {ceviri.text}"
+        )
         
     except Exception as e:
-        await query.edit_message_text(f"❌ Hata: {str(e)}")
+        await query.edit_message_text(f"❌ Çeviri başarısız: {str(e)}")
 
 def main():
     # Botu başlat
