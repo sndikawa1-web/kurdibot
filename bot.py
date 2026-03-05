@@ -1,17 +1,16 @@
 # Botê Analîzê yê Grupê - Badini Kürtçesi
-# Adminleri otomatik tanır, analizler otomatik paylaşılır
+# Gizli grup için optimize edildi - Admin yetkisi gerekli
 
 import os
 import json
 import logging
-import asyncio
 from datetime import datetime, timedelta
-from telegram import Update, ChatMemberAdministrator, ChatMemberOwner
+from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, ContextTypes
 
 # ==================== KONFİGÜRASYON ====================
-TOKEN = os.environ.get('BOT_TOKEN')  # Telegram'dan aldığınız token
-GROUP_ID = int(os.environ.get('GROUP_ID', 0))  # Grup ID'si
+TOKEN = os.environ.get('BOT_TOKEN')
+GROUP_ID = int(os.environ.get('GROUP_ID', 0))
 
 # Loglama
 logging.basicConfig(level=logging.INFO)
@@ -29,19 +28,41 @@ class BadiniMessages:
     TOP_MESSAGERS = "🏆 ئەو کەسێن گەلەك نامە رێکرین"
     
     # Eksi Sistemi
-    PENALTY_3 = "⚠️ ئەو کەسێت گەهشتین 3 جزایا"
+    PENALTY = "⚠️ جزا"
+    PENALTY_1 = "جزا 1 نقتە"
+    PENALTY_2 = "جزا 2 نقتە"
+    PENALTY_3 = "ئەو کەسێت گەهشتین 3 جزایا"
+    WARNING = "وژداری"
     
     # İstatistik
     MESSAGE = "نامە"
+    MEMBER = "ئەندام"
     TOTAL = "توتال"
+    RANKING = "رێزبەندی"
+    FIRST = "ێکەم"
+    SECOND = "دویەم"
+    THIRD = "سێیەم"
+    
+    # Komutlar
+    HELP = "ℹ️ هاریکاری"
+    FORCE_REPORT = "📋 راپورێ زۆرەکی"
+    RESET_ALL = "🔄 ژێبرنا گشتی"
     
     # Bildirimler
     CONGRATS = "🎉 دەستخوش"
     ATTENTION = "⚠️ اگهداری"
+    WARNING = "⚠️ وژداری"
     SUCCESS = "✅ ب سەرکەڤتیانە"
     ERROR = "❌ خەلەتیەک چێبی"
     
     # Özel İfadeler
+    NO_MESSAGES = "هیچ نامە رێنەکرە"
+    MOST_ACTIVE = "ئەندامێ ژ هەمیان اکتیڤتر"
+    TODAY_ACTIVE = "کەسێن ئەفرو نامە رێکرین"
+    TODAY_SILENT = "کەسێن ئەفروکا بێدەنگ"
+    PENALTY_CLEARED = "✅ جزایێ تە خلاس"
+    
+    # Örnek Cümleler
     INACTIVE_24H = "👤 د ماویێ 24 سعەتان دا ئەو کەسێن نە اخفتین:"
     PENALTY_3_LIST = "⚠️ ئەو کەسێن گەهشتین 3 جزایا:"
     RESET_PENALTY = "🔄 ب هنارتنا نامەکێ بو گروبی جزایێن خو ژێببە"
@@ -51,6 +72,7 @@ class BadiniMessages:
     # Admin Mesajları
     NOT_ADMIN = "⛔ تە دەستوری ئەمە نینە!"
     ADMIN_LIST = "👮 لیستا ئەدمینان:"
+    NEED_ADMIN = "⚠️ **خەتە!** ئەز ئەدمین نیمە! تکایە ئەز بکە ئەدمین."
 
 
 # ==================== VERİTABANI ====================
@@ -59,7 +81,7 @@ class Database:
         self.users_file = 'users.json'
         self.messages_file = 'messages.json'
         self.penalties_file = 'penalties.json'
-        self.admins_file = 'admins.json'  # Admin listesi
+        self.admins_file = 'admins.json'
         self.load_data()
     
     def load_data(self):
@@ -69,17 +91,14 @@ class Database:
                     json.dump({}, f, ensure_ascii=False)
     
     def save_admins(self, admin_list):
-        """Admin listesini kaydet"""
         with open(self.admins_file, 'w', encoding='utf-8') as f:
             json.dump(admin_list, f, ensure_ascii=False, indent=2)
     
     def get_admins(self):
-        """Admin listesini getir"""
         with open(self.admins_file, 'r', encoding='utf-8') as f:
             return json.load(f)
     
     def is_admin(self, user_id):
-        """Kullanıcı admin mi?"""
         admins = self.get_admins()
         return str(user_id) in admins
     
@@ -129,7 +148,6 @@ class Database:
                 json.dump(penalties, f, ensure_ascii=False, indent=2)
     
     def update_penalties(self):
-        """24 saat mesaj göndermeyenlere eksi ekle (adminler hariç)"""
         with open(self.penalties_file, 'r', encoding='utf-8') as f:
             penalties = json.load(f)
         
@@ -140,7 +158,6 @@ class Database:
         one_day_ago = datetime.now() - timedelta(days=1)
         
         for user_id, user_data in users.items():
-            # Adminleri atla
             if user_id in admins:
                 continue
                 
@@ -158,7 +175,6 @@ class Database:
         return penalties
     
     def get_users_with_3_penalties(self):
-        """3 eksiye ulaşanları getir (adminler hariç)"""
         with open(self.penalties_file, 'r', encoding='utf-8') as f:
             penalties = json.load(f)
         
@@ -179,7 +195,6 @@ class Database:
         return result
     
     def get_inactive_users_24h(self):
-        """24 saat içinde mesaj göndermeyenler (adminler hariç)"""
         with open(self.users_file, 'r', encoding='utf-8') as f:
             users = json.load(f)
         
@@ -198,7 +213,6 @@ class Database:
         return inactive
     
     def get_top_users(self, hours):
-        """Belirtilen saat diliminde en çok mesaj göndereni bul"""
         with open(self.messages_file, 'r', encoding='utf-8') as f:
             messages = json.load(f)
         
@@ -232,6 +246,32 @@ class BadiniAnalizBot:
         self.token = token
         self.db = Database()
         self.msgs = BadiniMessages()
+        self.first_run = True
+    
+    async def check_bot_admin(self, context):
+        """Bot'un admin olup olmadığını kontrol et"""
+        try:
+            if not GROUP_ID:
+                return False
+            
+            bot_member = await context.bot.get_chat_member(GROUP_ID, context.bot.id)
+            
+            if bot_member.status in ['administrator', 'creator']:
+                logging.info("✅ Bot admin yetkisine sahip")
+                return True
+            else:
+                logging.warning("⚠️ Bot admin değil!")
+                
+                # Gruba uyarı gönder
+                await context.bot.send_message(
+                    chat_id=GROUP_ID,
+                    text=f"⚠️ {self.msgs.NEED_ADMIN}"
+                )
+                return False
+                
+        except Exception as e:
+            logging.error(f"Yetki kontrol hatası: {e}")
+            return False
     
     async def update_admins(self, context):
         """Gruptaki adminleri güncelle"""
@@ -239,7 +279,12 @@ class BadiniAnalizBot:
             if not GROUP_ID:
                 return
             
-            # Grup üyelerini al
+            # Bot admin mi kontrol et
+            is_admin = await self.check_bot_admin(context)
+            if not is_admin:
+                return
+            
+            # Admin listesini al
             admins = await context.bot.get_chat_administrators(GROUP_ID)
             
             admin_dict = {}
@@ -248,34 +293,40 @@ class BadiniAnalizBot:
                 admin_dict[str(user.id)] = {
                     'username': user.username or user.first_name,
                     'first_name': user.first_name,
-                    'is_owner': isinstance(admin, ChatMemberOwner)
+                    'is_owner': admin.status == 'creator'
                 }
             
             # Adminleri kaydet
             self.db.save_admins(admin_dict)
             logging.info(f"✅ {len(admin_dict)} admin güncellendi")
             
+            # İlk çalıştırmada bilgi ver
+            if self.first_run:
+                self.first_run = False
+                await context.bot.send_message(
+                    chat_id=GROUP_ID,
+                    text=f"✅ **{self.msgs.BOT_NAME}**\n"
+                         f"👮 {len(admin_dict)} ئەدمین هاتنە ناسین\n"
+                         f"📊 24 سعەت رەپورت هەر شەڤ دێ هاتە"
+                )
+            
         except Exception as e:
             logging.error(f"Admin güncelleme hatası: {e}")
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """/start komutu - herkese açık"""
         await update.message.reply_text(
             f"👋 **{self.msgs.WELCOME}**\n\n"
             f"**{self.msgs.BOT_NAME}**\n\n"
-            f"ℹ️ ئەز بوتێ تحلیلێ گروپێ مە\n"
             f"📊 داتایێن 24 سعەت و حەڤتیێ\n"
-            f"⚠️ سیستمێ جزایێن بێدەنگیان"
+            f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
+            f"👮 ئەدمین: {self.msgs.ADMIN_LIST}"
         )
     
     async def admin_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """/admin komutu - admin listesi (sadece adminler)"""
-        # Admin mi kontrol et
         if not self.db.is_admin(update.effective_user.id):
             await update.message.reply_text(self.msgs.NOT_ADMIN)
             return
         
-        # Admin listesini göster
         admins = self.db.get_admins()
         msg = f"**{self.msgs.ADMIN_LIST}**\n\n"
         
@@ -287,19 +338,14 @@ class BadiniAnalizBot:
         await update.message.reply_text(msg)
     
     async def force_report_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """/force_report - manuel rapor (sadece adminler)"""
         if not self.db.is_admin(update.effective_user.id):
             await update.message.reply_text(self.msgs.NOT_ADMIN)
             return
         
         await update.message.reply_text("🚀 رەپورت هاتیە ئامادەکرن...")
-        
-        # Raporu gruba gönder
         await self.send_daily_report(context)
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Gelen mesajları işle"""
-        # Sadece gruplar
         if update.effective_chat.type not in ['group', 'supergroup']:
             return
         
@@ -307,34 +353,28 @@ class BadiniAnalizBot:
         if not user:
             return
         
-        # Mesajı kaydet
         self.db.add_message(user.id, user.username, user.first_name)
     
     async def send_daily_report(self, context):
-        """Günlük rapor gönder"""
         if not GROUP_ID:
             return
         
-        # En çok mesaj gönderenler
         top_user_24h = self.db.get_top_users(24)
         top_user_12h = self.db.get_top_users(12)
         inactive = self.db.get_inactive_users_24h()
         
         msg = f"**📊 {self.msgs.REPORT_24H}**\n\n"
         
-        # 24 saat en çok
         if top_user_24h:
             username, count = top_user_24h
             msg += f"**🏆 {self.msgs.TOP_MESSAGERS} (24h):**\n"
             msg += f"👑 {username} - {count} {self.msgs.MESSAGE}\n\n"
         
-        # 12 saat en çok
         if top_user_12h:
             username, count = top_user_12h
             msg += f"**🥇 {self.msgs.TOP_MESSAGERS} (12h):**\n"
             msg += f"👑 {username} - {count} {self.msgs.MESSAGE}\n\n"
         
-        # Pasifler
         if inactive:
             msg += f"**💤 {self.msgs.INACTIVE_24H}**\n"
             for username in inactive[:10]:
@@ -346,11 +386,9 @@ class BadiniAnalizBot:
         )
     
     async def send_weekly_report(self, context):
-        """Haftalık rapor gönder"""
         if not GROUP_ID:
             return
         
-        # Haftanın en aktif üyesi
         top_weekly = self.db.get_top_users(168)
         
         msg = f"**📈 {self.msgs.REPORT_WEEKLY}**\n\n"
@@ -360,7 +398,6 @@ class BadiniAnalizBot:
             msg += f"**👑 {self.msgs.WEEKLY_TOP}**\n"
             msg += f"**{username}** - {count} {self.msgs.MESSAGE}\n\n"
         
-        # 3 eksiye ulaşanlar
         penalties = self.db.get_users_with_3_penalties()
         if penalties:
             msg += f"**⚠️ {self.msgs.PENALTY_3_LIST}**\n"
@@ -375,10 +412,8 @@ class BadiniAnalizBot:
         )
     
     async def check_penalties_job(self, context):
-        """Eksileri kontrol et"""
         self.db.update_penalties()
         
-        # 3 eksiye ulaşanları bildir
         penalties = self.db.get_users_with_3_penalties()
         
         if penalties and GROUP_ID:
@@ -394,17 +429,13 @@ class BadiniAnalizBot:
             )
     
     async def update_admins_job(self, context):
-        """Admin listesini güncelle (her gün)"""
         await self.update_admins(context)
     
     def run(self):
-        """Botu başlat"""
         application = Application.builder().token(self.token).build()
         
-        # Komutlar (herkese açık)
+        # Komutlar
         application.add_handler(CommandHandler("start", self.start_command))
-        
-        # Admin komutları (admin kontrolü içeride)
         application.add_handler(CommandHandler("admin", self.admin_command))
         application.add_handler(CommandHandler("force_report", self.force_report_command))
         
@@ -424,29 +455,28 @@ class BadiniAnalizBot:
             # Her gün adminleri güncelle
             job_queue.run_daily(
                 self.update_admins_job,
-                time=datetime.time(hour=3, minute=0)  # Gece 3'te
+                time=datetime.time(hour=3, minute=0)
             )
             
             # Her gün eksileri kontrol et
             job_queue.run_daily(
                 self.check_penalties_job,
-                time=datetime.time(hour=0, minute=30)  # Gece 12:30'da
+                time=datetime.time(hour=0, minute=30)
             )
             
             # Her gün rapor gönder
             job_queue.run_daily(
                 self.send_daily_report,
-                time=datetime.time(hour=23, minute=59)  # Gece 23:59'da
+                time=datetime.time(hour=23, minute=59)
             )
             
             # Her Pazar haftalık rapor
             job_queue.run_daily(
                 self.send_weekly_report,
                 time=datetime.time(hour=23, minute=59),
-                days=(6,)  # Pazar
+                days=(6,)
             )
         
-        # Botu başlat
         print(f"🚀 {self.msgs.BOT_NAME} başladı...")
         print(f"📊 Grup ID: {GROUP_ID}")
         application.run_polling()
