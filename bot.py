@@ -285,6 +285,30 @@ class Database:
         
         top_hours = sorted(hour_counts.items(), key=lambda x: x[1], reverse=True)[:5]
         return [(f"{h}:00", count) for h, count in top_hours]
+    
+    def get_users_with_3_penalties(self):
+        with open(self.penalties_file, 'r', encoding='utf-8') as f:
+            penalties = json.load(f)
+        
+        with open(self.users_file, 'r', encoding='utf-8') as f:
+            users = json.load(f)
+        
+        admins = self.get_admins()
+        result = []
+        
+        for user_id, penalty_data in penalties.items():
+            if user_id in admins:
+                continue
+            if penalty_data.get('count', 0) >= 3:
+                user_data = users.get(user_id, {})
+                username = user_data.get('username')
+                user_id_int = user_data.get('user_id')
+                if username:
+                    result.append((user_id_int, f"@{username}"))
+                else:
+                    result.append((user_id_int, user_data.get('first_name', 'Bilinmiyor')))
+        
+        return result
 
 
 # ==================== ANA BOT ====================
@@ -304,6 +328,71 @@ class BadiniBot:
             return False
         return True
     
+    async def check_bot_admin(self, context):
+        """Bot'un admin olup olmadığını kontrol et"""
+        try:
+            if not GROUP_ID:
+                return False
+            
+            bot_member = await context.bot.get_chat_member(GROUP_ID, context.bot.id)
+            
+            if bot_member.status in ['administrator', 'creator']:
+                logging.info("✅ Bot admin yetkisine sahip")
+                return True
+            else:
+                logging.warning("⚠️ Bot admin değil!")
+                await context.bot.send_message(
+                    chat_id=GROUP_ID,
+                    text=f"⚠️ {self.msgs.NEED_ADMIN}"
+                )
+                return False
+                
+        except Exception as e:
+            logging.error(f"Yetki kontrol hatası: {e}")
+            return False
+    
+    async def update_admins(self, context):
+        """Gruptaki adminleri güncelle"""
+        try:
+            if not GROUP_ID:
+                return
+            
+            # Bot admin mi kontrol et
+            is_admin = await self.check_bot_admin(context)
+            if not is_admin:
+                return
+            
+            # Admin listesini al
+            admins = await context.bot.get_chat_administrators(GROUP_ID)
+            
+            admin_dict = {}
+            for admin in admins:
+                user = admin.user
+                admin_dict[str(user.id)] = {
+                    'username': user.username,
+                    'first_name': user.first_name,
+                    'user_id': user.id,
+                    'is_owner': admin.status == 'creator'
+                }
+            
+            # Adminleri kaydet
+            self.db.save_admins(admin_dict)
+            logging.info(f"✅ {len(admin_dict)} admin güncellendi")
+            
+            # İlk çalıştırmada bilgi ver
+            if self.first_run:
+                self.first_run = False
+                await context.bot.send_message(
+                    chat_id=GROUP_ID,
+                    text=f"✅ {self.msgs.BOT_NAME}\n"
+                         f"👮 {len(admin_dict)} ئەدمین هاتنە ناسین\n"
+                         f"📊 24 سعەت رەپورت هەر شەڤ دێ هاتە\n\n"
+                         f"⏰ کاتی عێراق: {datetime.now(IRAQ_TZ).strftime('%H:%M')}"
+                )
+            
+        except Exception as e:
+            logging.error(f"Admin güncelleme hatası: {e}")
+    
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.check_group(update):
             return
@@ -314,8 +403,8 @@ class BadiniBot:
             f"{self.msgs.BOT_NAME}\n\n"
             f"📊 داتایێن 24 سعەت و حەڤتیێ\n"
             f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
-            f"📋 /rapor - راپور\n"
-            f"🔄 /reload - بارکرن دوبارە\n"
+            f"📋 /rapor - راپور (ئەدمین)\n"
+            f"🔄 /reload - بارکرن دوبارە (ئەدمین)\n"
             f"📊 /top10 - توپ 10\n"
             f"📈 /haftalik - حەڤتیانە\n"
             f"📅 /aylik - هەیفانە\n"
@@ -374,6 +463,7 @@ class BadiniBot:
             return
         
         await update.message.reply_text(self.msgs.ADMIN_UPDATING)
+        await self.update_admins(context)
         await update.message.reply_text(self.msgs.ADMIN_UPDATED)
     
     async def top10_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -576,6 +666,12 @@ class BadiniBot:
         
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         
+        # Bot başlarken adminleri güncelle
+        async def init_admins(app):
+            await self.update_admins(app)
+        
+        application.post_init = init_admins
+        
         print(f"🚀 {self.msgs.BOT_NAME} başladı...")
         print(f"📋 Toplam komut: 16")
         application.run_polling()
@@ -586,6 +682,9 @@ if __name__ == "__main__":
     if not TOKEN:
         print("❌ HATA: BOT_TOKEN bulunamadı!")
         exit(1)
+    
+    if not GROUP_ID:
+        print("⚠️ UYARI: GROUP_ID tanımlanmamış!")
     
     bot = BadiniBot(TOKEN)
     bot.run()
