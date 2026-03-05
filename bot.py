@@ -22,6 +22,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # /kr komutu
 async def ceviri_komutu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Önce bir cevap verelim - test için
+    await update.message.reply_text("Komut alındı, işleniyor...")
+    
     # Mesajın yanıt olup olmadığını kontrol et
     if not update.message.reply_to_message:
         await update.message.reply_text("❌ Lütfen çevrilecek mesajı YANITLA (reply) ve /kr yazın!")
@@ -48,7 +51,7 @@ async def ceviri_komutu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
-        f"🔍 Hangi lehçeye çevirelim?",
+        "🔍 Hangi lehçeye çevirelim?",
         reply_markup=reply_markup
     )
 
@@ -69,14 +72,14 @@ async def buton_tiklandi(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Çeviriyi yap
         ceviri = translator.translate(orijinal_mesaj, dest=secilen_dil)
         
-        # Sonucu gönder
+        # Sonucu gönder - buton mesajını düzenle
         await query.edit_message_text(
             f"👤 **{mesaj_sahibi}**: {orijinal_mesaj}\n\n"
             f"📖 **{dil_adi}**: {ceviri.text}"
         )
         
     except Exception as e:
-        await query.edit_message_text(f"❌ Çeviri başarısız: {str(e)}")
+        await query.edit_message_text(f"❌ Çeviri başarısız: Hata: {str(e)}")
 
 def main():
     # Botu başlat
