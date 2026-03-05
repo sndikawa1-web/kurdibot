@@ -3,49 +3,41 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from googletrans import Translator
 
-# Token'ı al
+# Token
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
-# Çeviri yapıcı
+# Çeviri
 translator = Translator()
 
-# /start komutu
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Merhaba! Ben çeviri botuyum.\n\n"
-        "Kullanım: Bir mesajı yanıtla (reply) ve /kr yaz"
-    )
+    await update.message.reply_text("✅ Bot aktif - Sadece Sorani çeviri yapar")
 
 # /kr komutu
 async def ceviri(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Yanıtlanan mesaj var mı?
-    if not update.message.reply_to_message:
-        await update.message.reply_text("❌ Bir mesajı yanıtla ve /kr yaz!")
-        return
-    
-    # Mesajı al
-    mesaj = update.message.reply_to_message.text
-    
-    if not mesaj:
-        await update.message.reply_text("❌ Bu mesaj çevrilemez!")
-        return
-    
     try:
-        # Çeviriyi yap (Kürtçe'ye - otomatik Kurmanci)
-        ceviri = translator.translate(mesaj, dest='ku')
+        # Yanıt var mı?
+        if not update.message.reply_to_message:
+            return
         
-        # Sadece çeviriyi gönder
-        await update.message.reply_text(f"📖 {ceviri.text}")
+        # Mesajı al
+        mesaj = update.message.reply_to_message.text
+        if not mesaj:
+            return
         
-    except Exception as e:
-        await update.message.reply_text("❌ Çeviri başarısız")
+        # SADECE Sorani'ye çevir (ckb)
+        ceviri = translator.translate(mesaj, dest='ckb')
+        
+        # SADECE çeviriyi gönder
+        await update.message.reply_text(ceviri.text)
+        
+    except:
+        pass  # Hata olursa sessiz ol
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
-    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("kr", ceviri))
-    
     app.run_polling()
 
 if __name__ == '__main__':
