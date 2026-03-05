@@ -1,16 +1,19 @@
 # Botê Analîzê yê Grupê - Badini Kürtçesi
-# Komutlar: /start, /rapor (admin), /reload (admin)
+# Sadece belirli grupta çalışır, Irak saatine göre gece 12:00'de rapor
 
 import os
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, ContextTypes
 
 # ==================== KONFİGÜRASYON ====================
 TOKEN = os.environ.get('BOT_TOKEN')
-GROUP_ID = int(os.environ.get('GROUP_ID', 0))
+GROUP_ID = int(os.environ.get('GROUP_ID', 0))  # Senin grup ID'n
+
+# Irak Saati (UTC+3)
+IRAQ_TZ = timezone(timedelta(hours=3))
 
 # Loglama
 logging.basicConfig(level=logging.INFO)
@@ -73,6 +76,10 @@ class BadiniMessages:
     ADMIN_UPDATING = "🔄 لیستا ئەدمینان تازە دبیت..."
     REPORT_PREPARING = "🚀 رەپورت هاتیە ئامادەکرن..."
     NEED_ADMIN = "⚠️ ئەز ئەدمین نیمە! تکایە ئەز بکە ئەدمین."
+    
+    # Özel mesajlar
+    PRIVATE_CHAT_ERROR = "❌ ئەز تەنێ د گروپان دا کار دکەم! (Sadece gruplarda çalışırım)"
+    WRONG_GROUP_ERROR = "❌ ئەز تەنێ بۆ گروپێ تایبەت کار دکەم! (Sadece özel grubumda çalışırım)"
 
 
 # ==================== VERİTABANI ====================
@@ -103,7 +110,7 @@ class Database:
         return str(user_id) in admins
     
     def add_message(self, user_id, username, first_name):
-        today = datetime.now().strftime("%Y-%m-%d")
+        today = datetime.now(IRAQ_TZ).strftime("%Y-%m-%d")
         user_id_str = str(user_id)
         
         # Kullanıcıyı kaydet
@@ -113,7 +120,7 @@ class Database:
         users[user_id_str] = {
             'username': username or first_name,
             'first_name': first_name,
-            'last_seen': datetime.now().isoformat()
+            'last_seen': datetime.now(IRAQ_TZ).isoformat()
         }
         
         with open(self.users_file, 'w', encoding='utf-8') as f:
@@ -141,7 +148,7 @@ class Database:
             
             penalties[user_id_str] = {
                 'count': 0,
-                'last_message': datetime.now().isoformat()
+                'last_message': datetime.now(IRAQ_TZ).isoformat()
             }
             
             with open(self.penalties_file, 'w', encoding='utf-8') as f:
@@ -155,7 +162,7 @@ class Database:
             users = json.load(f)
         
         admins = self.get_admins()
-        one_day_ago = datetime.now() - timedelta(days=1)
+        one_day_ago = datetime.now(IRAQ_TZ) - timedelta(days=1)
         
         for user_id, user_data in users.items():
             if user_id in admins:
@@ -199,7 +206,7 @@ class Database:
             users = json.load(f)
         
         admins = self.get_admins()
-        one_day_ago = datetime.now() - timedelta(days=1)
+        one_day_ago = datetime.now(IRAQ_TZ) - timedelta(days=1)
         inactive = []
         
         for user_id, user_data in users.items():
@@ -219,7 +226,7 @@ class Database:
         with open(self.users_file, 'r', encoding='utf-8') as f:
             users = json.load(f)
         
-        since_date = (datetime.now() - timedelta(hours=hours)).date()
+        since_date = (datetime.now(IRAQ_TZ) - timedelta(hours=hours)).date()
         
         user_counts = {}
         for date_str, daily_msgs in messages.items():
@@ -309,25 +316,47 @@ class BadiniAnalizBot:
                          f"👮 {len(admin_dict)} ئەدمین هاتنە ناسین\n"
                          f"📊 24 سعەت رەپورت هەر شەڤ دێ هاتە\n"
                          f"📋 {self.msgs.REPORT} - تەنێ بو ئەدمینان\n"
-                         f"🔄 {self.msgs.RELOAD} - تەنێ بو ئەدمینان"
+                         f"🔄 {self.msgs.RELOAD} - تەنێ بو ئەدمینان\n\n"
+                         f"⏰ کاتی عێراق: 12:00 شەڤ"
                 )
             
         except Exception as e:
             logging.error(f"Admin güncelleme hatası: {e}")
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """/start komutu - herkese açık"""
+        """/start komutu - sadece grupta çalışır"""
+        # Özel sohbet mi kontrol et
+        if update.effective_chat.type == 'private':
+            await update.message.reply_text(self.msgs.PRIVATE_CHAT_ERROR)
+            return
+        
+        # Doğru grup mu kontrol et
+        if update.effective_chat.id != GROUP_ID:
+            await update.message.reply_text(self.msgs.WRONG_GROUP_ERROR)
+            return
+        
         await update.message.reply_text(
             f"👋 **{self.msgs.WELCOME}**\n\n"
             f"**{self.msgs.BOT_NAME}**\n\n"
             f"📊 داتایێن 24 سعەت و حەڤتیێ\n"
             f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
             f"📋 {self.msgs.REPORT} - تەنێ بو ئەدمینان\n"
-            f"🔄 {self.msgs.RELOAD} - تەنێ بو ئەدمینان"
+            f"🔄 {self.msgs.RELOAD} - تەنێ بو ئەدمینان\n\n"
+            f"⏰ کاتی عێراق: 12:00 شەڤ"
         )
     
     async def rapor_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """/rapor komutu - SADECE ADMINLER İÇİN"""
+        """/rapor komutu - sadece adminler için, sadece grupta"""
+        # Özel sohbet mi kontrol et
+        if update.effective_chat.type == 'private':
+            await update.message.reply_text(self.msgs.PRIVATE_CHAT_ERROR)
+            return
+        
+        # Doğru grup mu kontrol et
+        if update.effective_chat.id != GROUP_ID:
+            await update.message.reply_text(self.msgs.WRONG_GROUP_ERROR)
+            return
+        
         # Admin mi kontrol et
         if not self.db.is_admin(update.effective_user.id):
             await update.message.reply_text(self.msgs.NOT_ADMIN)
@@ -341,6 +370,7 @@ class BadiniAnalizBot:
         inactive = self.db.get_inactive_users_24h()
         
         msg = f"**📊 {self.msgs.REPORT_24H}**\n\n"
+        msg += f"⏰ **کاتی عێراق:** {datetime.now(IRAQ_TZ).strftime('%H:%M')}\n\n"
         
         # Genel istatistikler
         if top_user_24h:
@@ -362,7 +392,18 @@ class BadiniAnalizBot:
         await update.message.reply_text(msg)
     
     async def reload_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """/reload komutu - sadece adminler için"""
+        """/reload komutu - sadece adminler için, sadece grupta"""
+        # Özel sohbet mi kontrol et
+        if update.effective_chat.type == 'private':
+            await update.message.reply_text(self.msgs.PRIVATE_CHAT_ERROR)
+            return
+        
+        # Doğru grup mu kontrol et
+        if update.effective_chat.id != GROUP_ID:
+            await update.message.reply_text(self.msgs.WRONG_GROUP_ERROR)
+            return
+        
+        # Admin mi kontrol et
         if not self.db.is_admin(update.effective_user.id):
             await update.message.reply_text(self.msgs.NOT_ADMIN)
             return
@@ -372,8 +413,9 @@ class BadiniAnalizBot:
         await update.message.reply_text(self.msgs.ADMIN_UPDATED)
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Gelen mesajları işle"""
-        if update.effective_chat.type not in ['group', 'supergroup']:
+        """Gelen mesajları işle - sadece doğru grupta"""
+        # Sadece doğru grup
+        if update.effective_chat.id != GROUP_ID:
             return
         
         user = update.effective_user
@@ -383,15 +425,18 @@ class BadiniAnalizBot:
         self.db.add_message(user.id, user.username, user.first_name)
     
     async def send_daily_report(self, context):
-        """Günlük rapor gönder (otomatik)"""
+        """Günlük rapor gönder (otomatik) - Irak saati 00:00"""
         if not GROUP_ID:
             return
+        
+        now = datetime.now(IRAQ_TZ)
         
         top_user_24h = self.db.get_top_users(24)
         top_user_12h = self.db.get_top_users(12)
         inactive = self.db.get_inactive_users_24h()
         
         msg = f"**📊 {self.msgs.REPORT_24H}**\n\n"
+        msg += f"⏰ **کاتی عێراق:** {now.strftime('%Y-%m-%d %H:%M')}\n\n"
         
         if top_user_24h:
             username, count = top_user_24h
@@ -418,9 +463,11 @@ class BadiniAnalizBot:
         if not GROUP_ID:
             return
         
+        now = datetime.now(IRAQ_TZ)
         top_weekly = self.db.get_top_users(168)
         
         msg = f"**📈 {self.msgs.REPORT_WEEKLY}**\n\n"
+        msg += f"⏰ **کاتی عێراق:** {now.strftime('%Y-%m-%d %H:%M')}\n\n"
         
         if top_weekly:
             username, count = top_weekly
@@ -466,12 +513,12 @@ class BadiniAnalizBot:
         """Botu başlat"""
         application = Application.builder().token(self.token).build()
         
-        # Komutlar
+        # Komutlar - hepsi grup kontrolü yapacak
         application.add_handler(CommandHandler("start", self.start_command))
-        application.add_handler(CommandHandler("rapor", self.rapor_command))  # SADECE ADMIN - TÜRKÇE KOMUT
-        application.add_handler(CommandHandler("reload", self.reload_command))  # SADECE ADMIN
+        application.add_handler(CommandHandler("rapor", self.rapor_command))
+        application.add_handler(CommandHandler("reload", self.reload_command))
         
-        # Mesaj handler
+        # Mesaj handler - sadece doğru gruptan mesajları işler
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         
         # Bot başlarken adminleri güncelle
@@ -480,38 +527,40 @@ class BadiniAnalizBot:
         
         application.post_init = init_admins
         
-        # Zamanlanmış görevler
+        # Zamanlanmış görevler - Irak saatine göre
         job_queue = application.job_queue
         
         if job_queue:
-            # Her gün adminleri güncelle
+            # Her gün adminleri güncelle (Irak saati 03:00)
             job_queue.run_daily(
                 self.update_admins_job,
-                time=datetime.time(hour=3, minute=0)
+                time=datetime.time(hour=3, minute=0, tzinfo=IRAQ_TZ)
             )
             
-            # Her gün eksileri kontrol et
+            # Her gün eksileri kontrol et (Irak saati 00:30)
             job_queue.run_daily(
                 self.check_penalties_job,
-                time=datetime.time(hour=0, minute=30)
+                time=datetime.time(hour=0, minute=30, tzinfo=IRAQ_TZ)
             )
             
-            # Her gün rapor gönder
+            # Her gün rapor gönder (Irak saati 00:00 - GECE 12)
             job_queue.run_daily(
                 self.send_daily_report,
-                time=datetime.time(hour=23, minute=59)
+                time=datetime.time(hour=0, minute=0, tzinfo=IRAQ_TZ)
             )
             
-            # Her Pazar haftalık rapor
+            # Her Pazar haftalık rapor (Irak saati 00:00)
             job_queue.run_daily(
                 self.send_weekly_report,
-                time=datetime.time(hour=23, minute=59),
-                days=(6,)
+                time=datetime.time(hour=0, minute=0, tzinfo=IRAQ_TZ),
+                days=(6,)  # Pazar
             )
         
         print(f"🚀 {self.msgs.BOT_NAME} başladı...")
         print(f"📊 Grup ID: {GROUP_ID}")
-        print(f"📋 Komutlar: /start (herkese açık), /rapor (sadece admin), /reload (sadece admin)")
+        print(f"⏰ Irak Saati: {datetime.now(IRAQ_TZ).strftime('%H:%M')}")
+        print(f"📋 Komutlar: /start, /rapor (admin), /reload (admin)")
+        print(f"⏱ Otomatik rapor: Her gece 00:00 Irak saati")
         application.run_polling()
 
 
