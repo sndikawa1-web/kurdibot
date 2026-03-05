@@ -2,16 +2,21 @@ import os
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from googletrans import Translator
+from translate import Translator
 
 # Token'ı environment variable'dan al
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
-# Çeviri yapıcı
-translator = Translator()
-
 # Loglama
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+
+# Dil çevirileri için yardımcı fonksiyon
+def ceviri_yap(text, hedef_dil):
+    try:
+        translator = Translator(to_lang=hedef_dil)
+        return translator.translate(text)
+    except:
+        return None
 
 # /start komutu
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -22,9 +27,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # /kr komutu
 async def ceviri_komutu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Önce bir cevap verelim - test için
-    await update.message.reply_text("Komut alındı, işleniyor...")
-    
     # Mesajın yanıt olup olmadığını kontrol et
     if not update.message.reply_to_message:
         await update.message.reply_text("❌ Lütfen çevrilecek mesajı YANITLA (reply) ve /kr yazın!")
@@ -70,16 +72,19 @@ async def buton_tiklandi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         # Çeviriyi yap
-        ceviri = translator.translate(orijinal_mesaj, dest=secilen_dil)
+        ceviri = ceviri_yap(orijinal_mesaj, secilen_dil)
         
-        # Sonucu gönder - buton mesajını düzenle
-        await query.edit_message_text(
-            f"👤 **{mesaj_sahibi}**: {orijinal_mesaj}\n\n"
-            f"📖 **{dil_adi}**: {ceviri.text}"
-        )
+        if ceviri:
+            # Sonucu gönder
+            await query.edit_message_text(
+                f"👤 **{mesaj_sahibi}**: {orijinal_mesaj}\n\n"
+                f"📖 **{dil_adi}**: {ceviri}"
+            )
+        else:
+            await query.edit_message_text("❌ Çeviri başarısız oldu.")
         
     except Exception as e:
-        await query.edit_message_text(f"❌ Çeviri başarısız: Hata: {str(e)}")
+        await query.edit_message_text(f"❌ Hata: {str(e)}")
 
 def main():
     # Botu başlat
