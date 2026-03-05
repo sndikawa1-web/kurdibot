@@ -316,7 +316,7 @@ class BadiniAnalizBot:
                 self.first_run = False
                 await context.bot.send_message(
                     chat_id=GROUP_ID,
-                    text=f"✅ **{self.msgs.BOT_NAME}**\n"
+                    text=f"✅ {self.msgs.BOT_NAME}\n"
                          f"👮 {len(admin_dict)} ئەدمین هاتنە ناسین\n"
                          f"📊 24 سعەت رەپورت هەر شەڤ دێ هاتە\n"
                          f"📋 {self.msgs.REPORT} - تەنێ بو ئەدمینان\n"
@@ -340,8 +340,8 @@ class BadiniAnalizBot:
             return
         
         await update.message.reply_text(
-            f"👋 **{self.msgs.WELCOME}**\n\n"
-            f"**{self.msgs.BOT_NAME}**\n\n"
+            f"👋 {self.msgs.WELCOME}\n\n"
+            f"{self.msgs.BOT_NAME}\n\n"
             f"📊 داتایێن 24 سعەت و حەڤتیێ\n"
             f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
             f"📋 {self.msgs.REPORT} - تەنێ بو ئەدمینان\n"
@@ -373,11 +373,11 @@ class BadiniAnalizBot:
         inactive = self.db.get_inactive_users_24h()
         
         now = datetime.now(IRAQ_TZ)
-        msg = f"**📊 {self.msgs.REPORT_24H}**\n\n"
-        msg += f"⏰ **کاتی عێراق:** {now.strftime('%Y-%m-%d %H:%M')}\n\n"
+        msg = f"📊 {self.msgs.REPORT_24H}\n\n"
+        msg += f"⏰ کاتی عێراق: {now.strftime('%Y-%m-%d %H:%M')}\n\n"
         
         if all_users:
-            msg += f"**📝 {self.msgs.MESSAGE_LIST}**\n"
+            msg += f"📝 {self.msgs.MESSAGE_LIST}\n"
             for i, (username, count) in enumerate(all_users, 1):
                 if i == 1:
                     medal = "🥇"
@@ -387,15 +387,15 @@ class BadiniAnalizBot:
                     medal = "🥉"
                 else:
                     medal = "📌"
-                msg += f"{medal} **{username}** - {count} {self.msgs.MESSAGE}\n"
+                msg += f"{medal} {username} - {count} {self.msgs.MESSAGE}\n"
             
-            msg += f"\n📊 **{self.msgs.TOTAL}:** {len(all_users)} {self.msgs.MEMBER}\n\n"
+            msg += f"\n📊 {self.msgs.TOTAL}: {len(all_users)} {self.msgs.MEMBER}\n\n"
         else:
             msg += f"{self.msgs.NO_MESSAGES}\n\n"
         
         # Pasif kullanıcılar
         if inactive:
-            msg += f"**💤 {self.msgs.INACTIVE_24H}**\n"
+            msg += f"💤 {self.msgs.INACTIVE_24H}\n"
             for username in inactive[:10]:
                 msg += f"• {username}\n"
         
@@ -445,11 +445,11 @@ class BadiniAnalizBot:
         all_users = self.db.get_all_users_message_counts_24h()
         inactive = self.db.get_inactive_users_24h()
         
-        msg = f"**📊 {self.msgs.REPORT_24H}**\n\n"
-        msg += f"⏰ **کاتی عێراق:** {now.strftime('%Y-%m-%d %H:%M')}\n\n"
+        msg = f"📊 {self.msgs.REPORT_24H}\n\n"
+        msg += f"⏰ کاتی عێراق: {now.strftime('%Y-%m-%d %H:%M')}\n\n"
         
         if all_users:
-            msg += f"**📝 {self.msgs.MESSAGE_LIST}**\n"
+            msg += f"📝 {self.msgs.MESSAGE_LIST}\n"
             for i, (username, count) in enumerate(all_users, 1):
                 if i == 1:
                     medal = "🥇"
@@ -459,15 +459,15 @@ class BadiniAnalizBot:
                     medal = "🥉"
                 else:
                     medal = "📌"
-                msg += f"{medal} **{username}** - {count} {self.msgs.MESSAGE}\n"
+                msg += f"{medal} {username} - {count} {self.msgs.MESSAGE}\n"
             
-            msg += f"\n📊 **{self.msgs.TOTAL}:** {len(all_users)} {self.msgs.MEMBER}\n\n"
+            msg += f"\n📊 {self.msgs.TOTAL}: {len(all_users)} {self.msgs.MEMBER}\n\n"
         else:
             msg += f"{self.msgs.NO_MESSAGES}\n\n"
         
         # Pasif kullanıcılar
         if inactive:
-            msg += f"**💤 {self.msgs.INACTIVE_24H}**\n"
+            msg += f"💤 {self.msgs.INACTIVE_24H}\n"
             for username in inactive[:10]:
                 msg += f"• {username}\n"
         
@@ -484,16 +484,16 @@ class BadiniAnalizBot:
         now = datetime.now(IRAQ_TZ)
         all_users = self.db.get_all_users_message_counts_24h()  # 24 saatlik
         
-        msg = f"**📈 {self.msgs.REPORT_WEEKLY}**\n\n"
-        msg += f"⏰ **کاتی عێراق:** {now.strftime('%Y-%m-%d %H:%M')}\n\n"
+        msg = f"📈 {self.msgs.REPORT_WEEKLY}\n\n"
+        msg += f"⏰ کاتی عێراق: {now.strftime('%Y-%m-%d %H:%M')}\n\n"
         
         if all_users:
-            msg += f"**👑 {self.msgs.MOST_ACTIVE}**\n"
-            msg += f"**{all_users[0][0]}** - {all_users[0][1]} {self.msgs.MESSAGE}\n\n"
+            msg += f"👑 {self.msgs.MOST_ACTIVE}\n"
+            msg += f"{all_users[0][0]} - {all_users[0][1]} {self.msgs.MESSAGE}\n\n"
         
         penalties = self.db.get_users_with_3_penalties()
         if penalties:
-            msg += f"**⚠️ {self.msgs.PENALTY_3_LIST}**\n"
+            msg += f"⚠️ {self.msgs.PENALTY_3_LIST}\n"
             for user_id, username in penalties:
                 msg += f"• {username}\n"
             
@@ -511,7 +511,7 @@ class BadiniAnalizBot:
         penalties = self.db.get_users_with_3_penalties()
         
         if penalties and GROUP_ID:
-            msg = f"**⚠️ {self.msgs.PENALTY_3_LIST}**\n\n"
+            msg = f"⚠️ {self.msgs.PENALTY_3_LIST}\n\n"
             for user_id, username in penalties:
                 msg += f"• {username}\n"
             
