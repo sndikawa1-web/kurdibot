@@ -144,9 +144,40 @@ class Database:
         
         return inactive
     
-    # ========== HATIRLATMA SİSTEMİ (YENİ) ==========
+    # ========== YENİ: DETAYLI PASİF KULLANICILAR (Etiketli) ==========
+    def get_inactive_users_detailed(self):
+        """24 saat konuşmayanları detaylı getir (user_id ve mention ile)"""
+        users = self.get_all_users()
+        admins = self.get_admins()
+        one_day_ago = datetime.now(IRAQ_TZ) - timedelta(days=1)
+        
+        inactive = []
+        
+        for user_id, user_data in users.items():
+            # Adminleri de listeye ekle (istersen bu satırı kaldır)
+            # if user_id in admins:
+            #     continue
+            
+            last_seen = datetime.fromisoformat(user_data.get('last_seen', '2000-01-01'))
+            
+            if last_seen < one_day_ago:
+                user_id_int = user_data.get('user_id')
+                username = user_data.get('username')
+                first_name = user_data.get('first_name', '?')
+                
+                # Etiket formatı
+                if username:
+                    mention = f"@{username}"
+                else:
+                    # İsmi etiketle (Telegram'da isimler etiketlenir)
+                    mention = f"[{first_name}](tg://user?id={user_id_int})"
+                
+                inactive.append((user_id_int, mention))
+        
+        return inactive
+    
+    # ========== HATIRLATMA SİSTEMİ ==========
     def get_users_for_reminder(self):
-        """Hatırlatma için kullanıcıları getir (24 saat ve 3 gün)"""
         users = self.get_all_users()
         admins = self.get_admins()
         now = datetime.now(IRAQ_TZ)
@@ -167,11 +198,8 @@ class Database:
             display = f"@{username}" if username else first_name
             user_id_int = user_data.get('user_id')
             
-            # 24 saat - 3 gün arası
             if last_seen < one_day_ago and last_seen >= three_days_ago:
                 reminder_24h.append((user_id_int, display))
-            
-            # 3 günden fazla
             elif last_seen < three_days_ago:
                 reminder_3d.append((user_id_int, display))
         
