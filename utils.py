@@ -1,19 +1,12 @@
 # ==================== YARDIMCI FONKSİYONLAR ====================
-from datetime import datetime, timezone, timedelta
-
-# Irak Saati (UTC+3)
-IRAQ_TZ = timezone(timedelta(hours=3))
+from datetime import datetime
+from config import IRAQ_TZ
 
 def get_iraq_time():
     return datetime.now(IRAQ_TZ)
 
 def format_time(dt):
     return dt.strftime("%Y-%m-%d %H:%M")
-
-def format_mention(username, user_id=None):
-    if username:
-        return f"@{username}"
-    return f"کاربەر{user_id}" if user_id else "کاربەر"
 
 def split_message(text, max_length=4096):
     """Uzun mesajları böl"""
