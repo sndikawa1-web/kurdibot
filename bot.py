@@ -63,12 +63,13 @@ class BadiniBot:
             f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
             f"📋 /rapor - راپور (ئەدمین)\n"
             f"🔄 /reload - بارکرن دوبارە (ئەدمین)\n"
-            f"📊 /top10 - توپ 10\n"
-            f"📈 /haftalik - حەڤتیانە\n"
-            f"📅 /aylik - هەیفانە\n"
+            f"📊 /top10 - توپ 10 (mesaj)\n"
+            f"📈 /haftalik - حەڤتیانە (mesaj)\n"
+            f"📅 /aylik - هەیفانە (mesaj)\n"
             f"⏰ /aktifsaat - دەمژمێرێن اکتیڤ\n"
-            f"📊 /seviye - لیفل\n"
+            f"📊 /seviye - لیفلێ من\n"
             f"👤 /siralamam - رێزبەندییا من\n"
+            f"🏆 /level - لیفلا پیلترین\n"
             f"👑 /sampiyon - شامپیۆن\n"
             f"📊 /kalite - کوالێتی\n\n"
             f"⏰ کاتی عێراق: {now.strftime('%H:%M')}"
@@ -234,6 +235,34 @@ class BadiniBot:
         
         await update.message.reply_text(msg)
     
+    async def level_ranking(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """📊 /level - Level sıralaması (en yüksek level'a göre top 10)"""
+        if not await self.check_group(update):
+            return
+        
+        # Level sisteminden top 10 kullanıcıyı al
+        top_users = self.level_system.get_top_users(10)
+        
+        if not top_users:
+            await update.message.reply_text("🏆 هێشتا داتا نینە!")
+            return
+        
+        msg = f"🏆 لیفلا پیلترین (Top 10 Level)\n\n"
+        
+        for i, (display_name, level, xp, messages) in enumerate(top_users, 1):
+            if i == 1:
+                medal = "🥇"
+            elif i == 2:
+                medal = "🥈"
+            elif i == 3:
+                medal = "🥉"
+            else:
+                medal = f"{i}."
+            
+            msg += f"{medal} {display_name} - لیفل {level} (XP: {xp})\n"
+        
+        await update.message.reply_text(msg)
+    
     async def weekly_champ(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.check_group(update):
             return
@@ -338,6 +367,7 @@ class BadiniBot:
         app.add_handler(CommandHandler("aktifsaat", self.active_hours))
         app.add_handler(CommandHandler("seviye", self.level))
         app.add_handler(CommandHandler("siralamam", self.myrank))
+        app.add_handler(CommandHandler("level", self.level_ranking))  # YENİ KOMUT
         app.add_handler(CommandHandler("sampiyon", self.weekly_champ))
         app.add_handler(CommandHandler("kalite", self.quality))
         
@@ -351,7 +381,7 @@ class BadiniBot:
         app.post_init = init_admins
         
         print(f"🚀 {self.msgs.BOT_NAME} başladı...")
-        print(f"📋 Toplam komut: 12")
+        print(f"📋 Toplam komut: 13")
         app.run_polling()
 
 
