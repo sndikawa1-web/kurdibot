@@ -1,0 +1,11 @@
+# JSON veritabanı dosyaları (BUNLARI EKLE!)
+*.json
+!requirements.txt
+!railway.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
