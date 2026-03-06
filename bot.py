@@ -1,8 +1,8 @@
 # ==================== ANA BOT ====================
 import os
 import logging
-from datetime import datetime
-import time
+import asyncio
+from datetime import datetime, time
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, ContextTypes
 
@@ -21,6 +21,7 @@ class BadiniBot:
         self.msgs = Messages()
         self.level_system = LevelSystem(self.db)
         self.first_run = True
+        self.user_state = {}  # Kullanıcıların menü durumu
     
     async def check_group(self, update: Update):
         if update.effective_chat.type == 'private':
@@ -51,7 +52,87 @@ class BadiniBot:
         except Exception as e:
             logging.error(f"Admin güncelleme hatası: {e}")
     
-    # ========== KOMUTLAR ==========
+    # ========== TOP MENU KOMUTU ==========
+    async def top(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """📋 /top - Ana menü"""
+        if not await self.check_group(update):
+            return
+        
+        user_id = update.effective_user.id
+        
+        menu_text = f"{self.msgs.TOP_MENU_TITLE}\n{self.msgs.TOP_MENU_OPTIONS}\n{self.msgs.TOP_MENU_PROMPT}"
+        self.user_state[user_id] = "main_menu"
+        
+        await update.message.reply_text(menu_text)
+    
+    async def handle_menu_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Menüden gelen seçimleri işle"""
+        if update.effective_chat.id != GROUP_ID:
+            return False
+        
+        user_id = update.effective_user.id
+        
+        if user_id not in self.user_state:
+            return False
+        
+        text = update.message.text.strip()
+        
+        if not text.isdigit():
+            await update.message.reply_text(self.msgs.TOP_MENU_INVALID)
+            return True
+        
+        choice = int(text)
+        
+        if choice < 1 or choice > 11:
+            await update.message.reply_text(self.msgs.TOP_MENU_INVALID)
+            return True
+        
+        # Kullanıcı durumunu temizle
+        del self.user_state[user_id]
+        
+        # Seçime göre işlem yap
+        if choice == 1:  # Admin Raporu
+            if self.db.is_admin(user_id):
+                await self.rapor(update, context)
+            else:
+                await update.message.reply_text(self.msgs.NOT_ADMIN)
+        
+        elif choice == 2:  # Admin Güncelle
+            if self.db.is_admin(user_id):
+                await self.reload(update, context)
+            else:
+                await update.message.reply_text(self.msgs.NOT_ADMIN)
+        
+        elif choice == 3:  # Top 10 Messages
+            await self.top10(update, context)
+        
+        elif choice == 4:  # Weekly Ranking
+            await self.weekly(update, context)
+        
+        elif choice == 5:  # Monthly Ranking
+            await self.monthly(update, context)
+        
+        elif choice == 6:  # Active Hours
+            await self.active_hours(update, context)
+        
+        elif choice == 7:  # Group Quality
+            await self.quality(update, context)
+        
+        elif choice == 8:  # Weekly Champion
+            await self.weekly_champ(update, context)
+        
+        elif choice == 9:  # My Level
+            await self.level(update, context)
+        
+        elif choice == 10:  # Level Ranking
+            await self.level_ranking(update, context)
+        
+        elif choice == 11:  # 24h Passive
+            await self.pasif(update, context)
+        
+        return True
+    
+    # ========== ESKİ KOMUTLAR (FONKSİYONLAR) ==========
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.check_group(update):
             return
@@ -62,25 +143,11 @@ class BadiniBot:
             f"{self.msgs.BOT_NAME}\n\n"
             f"📊 داتایێن 24 سعەت و حەڤتیێ\n"
             f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
-            f"📋 /rapor - راپور (ئەدمین)\n"
-            f"🔄 /reload - بارکرن دوبارە (ئەدمین)\n"
-            f"📊 /top10 - توپ 10 (mesaj)\n"
-            f"📈 /haftalik - حەڤتیانە (mesaj)\n"
-            f"📅 /aylik - هەیفانە (mesaj)\n"
-            f"⏰ /aktifsaat - دەمژمێرێن اکتیڤ\n"
-            f"📊 /seviye - لیفلێ من\n"
-            f"👤 /siralamam - رێزبەندییا من\n"
-            f"🏆 /level - لیفلا پیلترین\n"
-            f"👑 /sampiyon - شامپیۆن\n"
-            f"📊 /kalite - کوالێتی\n"
-            f"💤 /pasif - لیستا بێدەنگان\n\n"
+            f"📋 /top - مێنوی سەرەکی\n"
             f"⏰ کاتی عێراق: {now.strftime('%H:%M')}"
         )
     
     async def rapor(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not await self.check_group(update):
-            return
-        
         if not self.db.is_admin(update.effective_user.id):
             await update.message.reply_text(self.msgs.NOT_ADMIN)
             return
@@ -112,9 +179,6 @@ class BadiniBot:
         await update.message.reply_text(msg)
     
     async def reload(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not await self.check_group(update):
-            return
-        
         if not self.db.is_admin(update.effective_user.id):
             await update.message.reply_text(self.msgs.NOT_ADMIN)
             return
@@ -124,9 +188,6 @@ class BadiniBot:
         await update.message.reply_text(self.msgs.ADMIN_UPDATED)
     
     async def top10(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not await self.check_group(update):
-            return
-        
         all_users = self.db.get_all_users_message_counts(24)
         
         if not all_users:
@@ -141,10 +202,7 @@ class BadiniBot:
         await update.message.reply_text(msg)
     
     async def weekly(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not await self.check_group(update):
-            return
-        
-        all_users = self.db.get_all_users_message_counts(168)  # 7*24
+        all_users = self.db.get_all_users_message_counts(168)
         
         msg = f"📊 {self.msgs.WEEKLY_RANKING}\n\n"
         if all_users:
@@ -156,10 +214,7 @@ class BadiniBot:
         await update.message.reply_text(msg)
     
     async def monthly(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not await self.check_group(update):
-            return
-        
-        all_users = self.db.get_all_users_message_counts(720)  # 30*24
+        all_users = self.db.get_all_users_message_counts(720)
         
         msg = f"📊 {self.msgs.MONTHLY_RANKING}\n\n"
         if all_users:
@@ -171,9 +226,6 @@ class BadiniBot:
         await update.message.reply_text(msg)
     
     async def active_hours(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not await self.check_group(update):
-            return
-        
         top_hours = self.db.get_most_active_hours()
         
         msg = f"⏰ {self.msgs.ACTIVE_HOURS}\n\n"
@@ -183,9 +235,6 @@ class BadiniBot:
         await update.message.reply_text(msg)
     
     async def level(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not await self.check_group(update):
-            return
-        
         user_id = update.effective_user.id
         username = update.effective_user.username or update.effective_user.first_name
         
@@ -198,7 +247,6 @@ class BadiniBot:
             msg += f"⚡️ XP: {user_data['xp']}\n"
             msg += f"💬 {self.msgs.MESSAGE}: {user_data['total_messages']}\n"
             
-            # Sonraki level için gereken XP
             next_level_xp = self.level_system.get_xp_for_level(user_data['level'] + 1)
             remaining = next_level_xp - user_data['xp']
             if remaining > 0:
@@ -213,37 +261,7 @@ class BadiniBot:
         
         await update.message.reply_text(msg)
     
-    async def myrank(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not await self.check_group(update):
-            return
-        
-        user_id = update.effective_user.id
-        username = update.effective_user.username or update.effective_user.first_name
-        
-        user_data = self.level_system.get_user_data(user_id)
-        
-        if not user_data:
-            await update.message.reply_text(f"📊 {self.msgs.MY_RANK}\n\n👤 @{username}\nهێشتا داتا نینە!")
-            return
-        
-        rank, total = self.level_system.get_user_rank(user_id)
-        
-        msg = f"📊 {self.msgs.MY_RANK}\n\n"
-        msg += f"👤 @{username}\n"
-        msg += f"📊 {self.msgs.LEVEL}: {user_data['level']}\n"
-        msg += f"⚡️ XP: {user_data['xp']}\n"
-        msg += f"💬 {self.msgs.MESSAGE}: {user_data['total_messages']}\n"
-        
-        if rank:
-            msg += f"🏆 رێزبەندی: #{rank} ل {total}"
-        
-        await update.message.reply_text(msg)
-    
     async def level_ranking(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """📊 /level - Level sıralaması"""
-        if not await self.check_group(update):
-            return
-        
         top_users = self.level_system.get_top_users(10)
         
         if not top_users:
@@ -267,10 +285,7 @@ class BadiniBot:
         await update.message.reply_text(msg)
     
     async def weekly_champ(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not await self.check_group(update):
-            return
-        
-        all_users = self.db.get_all_users_message_counts(168)  # 7 gün
+        all_users = self.db.get_all_users_message_counts(168)
         
         if not all_users:
             await update.message.reply_text("🏆 هێشتا داتا نینە!")
@@ -286,9 +301,6 @@ class BadiniBot:
         await update.message.reply_text(msg)
     
     async def quality(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not await self.check_group(update):
-            return
-        
         all_users = self.db.get_all_users_message_counts(24)
         inactive = self.db.get_inactive_users_24h()
         
@@ -315,12 +327,7 @@ class BadiniBot:
         
         await update.message.reply_text(msg)
     
-    # ========== YENİ KOMUT: /pasif ==========
     async def pasif(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """/pasif - 24 saat konuşmayanları listele"""
-        if not await self.check_group(update):
-            return
-        
         inactive = self.db.get_inactive_users_24h()
         
         if not inactive:
@@ -335,22 +342,19 @@ class BadiniBot:
     
     # ========== HATIRLATMA GÖREVİ ==========
     async def reminder_job(self, context):
-        """Hatırlatma görevi - her gün saat 10:00'da çalışır"""
         if not GROUP_ID:
             return
         
         reminder_24h, reminder_3d = self.db.get_users_for_reminder()
         
-        # 24 saat hatırlatması
         if reminder_24h:
             for user_id, display in reminder_24h[:5]:
                 await context.bot.send_message(
                     chat_id=GROUP_ID,
                     text=self.msgs.REMINDER_24H.format(display)
                 )
-                await asyncio.sleep(1)  # 1 saniye bekle (spam olmasın)
+                await asyncio.sleep(1)
         
-        # 3 gün hatırlatması
         if reminder_3d:
             for user_id, display in reminder_3d[:5]:
                 await context.bot.send_message(
@@ -361,7 +365,6 @@ class BadiniBot:
     
     # ========== OTOMATİK RAPORLAR ==========
     async def send_daily_report(self, context):
-        """Günlük rapor gönder (her gece 00:00)"""
         if not GROUP_ID:
             return
         
@@ -390,7 +393,6 @@ class BadiniBot:
         await context.bot.send_message(chat_id=GROUP_ID, text=msg)
     
     async def send_weekly_report(self, context):
-        """Haftalık rapor gönder (her Pazar 00:00)"""
         if not GROUP_ID:
             return
         
@@ -413,7 +415,6 @@ class BadiniBot:
         await context.bot.send_message(chat_id=GROUP_ID, text=msg)
     
     async def check_penalties_job(self, context):
-        """Ceza kontrolü (her gece 00:30)"""
         if not GROUP_ID:
             return
         
@@ -434,30 +435,26 @@ class BadiniBot:
         if update.effective_chat.id != GROUP_ID:
             return
         
+        # Önce menü seçimi mi kontrol et
+        if await self.handle_menu_selection(update, context):
+            return  # Menü seçimi işlendi, normal mesaj işleme geçme
+        
         user = update.effective_user
         if not user:
             return
         
-        # Kullanıcıyı kaydet
+        # Normal mesaj işleme
         self.db.save_user(user.id, user.username, user.first_name)
-        
-        # Mesajı ekle
         self.db.add_message(user.id)
-        
-        # Cezayı sıfırla
         self.db.reset_penalty(user.id)
         
-        # Toplam mesaj sayısını bul
         total = self.db.get_total_message_count(user.id)
-        
-        # Seviye güncelle
         leveled_up, new_level = self.level_system.update_user(
             user.id, 
             user.username or user.first_name, 
             total
         )
         
-        # Level atladıysa bildirim gönder
         if leveled_up:
             emoji_id = self.level_system.get_level_emoji_id(new_level)
             display_name = f"@{user.username}" if user.username else user.first_name
@@ -476,20 +473,9 @@ class BadiniBot:
     def run(self):
         app = Application.builder().token(TOKEN).build()
         
-        # Komutlar
+        # SADECE 2 KOMUT: /top ve /start
+        app.add_handler(CommandHandler("top", self.top))
         app.add_handler(CommandHandler("start", self.start))
-        app.add_handler(CommandHandler("rapor", self.rapor))
-        app.add_handler(CommandHandler("reload", self.reload))
-        app.add_handler(CommandHandler("top10", self.top10))
-        app.add_handler(CommandHandler("haftalik", self.weekly))
-        app.add_handler(CommandHandler("aylik", self.monthly))
-        app.add_handler(CommandHandler("aktifsaat", self.active_hours))
-        app.add_handler(CommandHandler("seviye", self.level))
-        app.add_handler(CommandHandler("siralamam", self.myrank))
-        app.add_handler(CommandHandler("level", self.level_ranking))
-        app.add_handler(CommandHandler("sampiyon", self.weekly_champ))
-        app.add_handler(CommandHandler("kalite", self.quality))
-        app.add_handler(CommandHandler("pasif", self.pasif))  # YENİ KOMUT
         
         # Mesaj handler
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
@@ -504,13 +490,13 @@ class BadiniBot:
         job_queue = app.job_queue
         
         if job_queue:
-            # Her gün adminleri güncelle (03:00)
+            # Her gün admin güncelleme (03:00)
             job_queue.run_daily(
-                self.update_admins_job if hasattr(self, 'update_admins_job') else self.update_admins,
+                self.update_admins,
                 time=datetime.time(hour=3, minute=0, tzinfo=IRAQ_TZ)
             )
             
-            # Her gün hatırlatma (10:00) - YENİ
+            # Her gün hatırlatma (10:00)
             job_queue.run_daily(
                 self.reminder_job,
                 time=datetime.time(hour=10, minute=0, tzinfo=IRAQ_TZ)
@@ -536,14 +522,12 @@ class BadiniBot:
             )
         
         print(f"🚀 {self.msgs.BOT_NAME} başladı...")
-        print(f"📋 Toplam komut: 14")
-        print(f"⏰ Hatırlatma: Her gün 10:00'da")
+        print(f"📋 Komutlar: /top (ana menü), /start")
         app.run_polling()
 
 
 # ==================== BAŞLAT ====================
 if __name__ == "__main__":
-    import asyncio
     if not TOKEN:
         print("❌ HATA: BOT_TOKEN bulunamadı!")
         exit(1)
