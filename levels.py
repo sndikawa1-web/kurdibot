@@ -27,6 +27,29 @@ class LevelSystem:
         else:
             return 9000 + (level - 30) * 500
     
+    def get_level_emoji_id(self, level):
+        """Seviyeye göre emoji ID'si döndür"""
+        from messages import Messages
+        
+        if level <= 5:
+            return Messages.LEVEL_EMOJI_IDS['1-5']
+        elif level <= 10:
+            return Messages.LEVEL_EMOJI_IDS['6-10']
+        elif level <= 15:
+            return Messages.LEVEL_EMOJI_IDS['11-15']
+        elif level <= 20:
+            return Messages.LEVEL_EMOJI_IDS['16-20']
+        elif level <= 25:
+            return Messages.LEVEL_EMOJI_IDS['21-25']
+        elif level <= 30:
+            return Messages.LEVEL_EMOJI_IDS['26-30']
+        elif level <= 40:
+            return Messages.LEVEL_EMOJI_IDS['31-40']
+        elif level <= 50:
+            return Messages.LEVEL_EMOJI_IDS['41-50']
+        else:
+            return Messages.LEVEL_EMOJI_IDS['51+']
+    
     def update_user(self, user_id, username, total_messages):
         """Kullanıcının seviyesini güncelle"""
         user_id_str = str(user_id)
