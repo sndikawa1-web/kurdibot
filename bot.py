@@ -312,9 +312,17 @@ class BadiniBot:
         
         # Level atladıysa bildirim gönder
         if leveled_up:
+            emoji_id = self.level_system.get_level_emoji_id(new_level)
+            
             await context.bot.send_message(
                 chat_id=GROUP_ID,
-                text=self.msgs.LEVEL_UP.format(f"@{user.username or user.first_name}", new_level)
+                text=self.msgs.LEVEL_UP.format(
+                    f"<emoji id={emoji_id}>",           # Baştaki Flork emojisi
+                    new_level,                            # Seviye numarası
+                    f"<emoji id={emoji_id}>",           # Sondaki Flork emojisi
+                    f"@{user.username or user.first_name} {new_level}"  # @kullanici 5
+                ),
+                parse_mode='HTML'
             )
     
     def run(self):
@@ -343,6 +351,7 @@ class BadiniBot:
         app.post_init = init_admins
         
         print(f"🚀 {self.msgs.BOT_NAME} başladı...")
+        print(f"📋 Toplam komut: 12")
         app.run_polling()
 
 
