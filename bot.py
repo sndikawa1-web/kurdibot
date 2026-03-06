@@ -1,9 +1,9 @@
 # ==================== ANA BOT ====================
 import os
 import sys
+import json
 import logging
 import asyncio
-import json
 from datetime import datetime, time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -17,7 +17,7 @@ from utils import format_time, split_message
 # Loglama
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout)
     ]
@@ -30,7 +30,17 @@ class BadiniBot:
         self.msgs = Messages()
         self.level_system = LevelSystem(self.db)
         self.first_run = True
+        
+        # YENİ LEVEL SİSTEMİ
+        self.new_levels_file = 'new_levels.json'
+        self.init_new_levels()
         logger.info("✅ Bot başlatılıyor...")
+    
+    def init_new_levels(self):
+        """Yeni level dosyasını oluştur"""
+        if not os.path.exists(self.new_levels_file):
+            with open(self.new_levels_file, 'w') as f:
+                json.dump({}, f)
     
     async def check_group(self, update: Update):
         if update.effective_chat.type == 'private':
@@ -61,6 +71,71 @@ class BadiniBot:
         except Exception as e:
             logger.error(f"Admin güncelleme hatası: {e}")
     
+    # ========== YENİ LEVEL SİSTEMİ ==========
+    async def check_new_level(self, user_id, username, update, context):
+        """YENİ level sistemi - her mesajda çağrılacak"""
+        
+        # Dosyayı oku
+        with open(self.new_levels_file, 'r') as f:
+            users = json.load(f)
+        
+        user_id_str = str(user_id)
+        
+        # İlk kez kayıt
+        if user_id_str not in users:
+            users[user_id_str] = {
+                'username': username,
+                'messages': 0,
+                'level': 1
+            }
+        
+        # Mesaj sayısını artır
+        users[user_id_str]['messages'] += 1
+        message_count = users[user_id_str]['messages']
+        
+        # Yeni level hesapla (her 20 mesajda bir level)
+        new_level = 1 + (message_count // 20)
+        old_level = users[user_id_str]['level']
+        
+        # Level atladı mı?
+        if new_level > old_level:
+            users[user_id_str]['level'] = new_level
+            
+            # BİLDİRİM GÖNDER
+            display_name = f"@{username}" if username else f"Kullanıcı"
+            await context.bot.send_message(
+                chat_id=GROUP_ID,
+                text=f"🎉 {display_name} Level {new_level} oldu! (Yeni Sistem)"
+            )
+        
+        # Kaydet
+        with open(self.new_levels_file, 'w') as f:
+            json.dump(users, f, indent=2)
+    
+    async def test_new_level(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """🧪 /newlevel - Yeni level sistemini test et"""
+        if not await self.check_group(update):
+            return
+        
+        # Dosyayı oku
+        with open(self.new_levels_file, 'r') as f:
+            users = json.load(f)
+        
+        user_id = str(update.effective_user.id)
+        username = update.effective_user.username or update.effective_user.first_name
+        
+        if user_id in users:
+            data = users[user_id]
+            msg = f"📊 **YENİ LEVEL SİSTEMİ**\n\n"
+            msg += f"👤 @{username}\n"
+            msg += f"📊 Mesaj: {data['messages']}\n"
+            msg += f"🏆 Level: {data['level']}\n"
+            msg += f"📈 Sonraki level: {20 - (data['messages'] % 20)} mesaj kaldı"
+        else:
+            msg = f"❌ @{username} için henüz veri yok"
+        
+        await update.message.reply_text(msg)
+    
     # ========== BUTONLU MENÜ ==========
     async def top(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """📋 /top - Butonlu ana menü"""
@@ -89,7 +164,8 @@ class BadiniBot:
                 InlineKeyboardButton("🏆 level", callback_data="level")
             ],
             [
-                InlineKeyboardButton("💤 24h", callback_data="24h")
+                InlineKeyboardButton("💤 24h", callback_data="24h"),
+                InlineKeyboardButton("🧪 newlevel", callback_data="newlevel")
             ]
         ]
         
@@ -147,6 +223,34 @@ class BadiniBot:
         
         elif command == "24h":
             await self.pasif_callback(query, context)
+        
+        elif command == "newlevel":
+            # Newlevel butonuna basınca test sonucunu göster
+            await self.test_new_level_callback(query, context)
+    
+    async def test_new_level_callback(self, query, context):
+        """Buton için newlevel callback'i"""
+        user_id = query.from_user.id
+        username = query.from_user.username or query.from_user.first_name
+        
+        with open(self.new_levels_file, 'r') as f:
+            users = json.load(f)
+        
+        user_id_str = str(user_id)
+        
+        if user_id_str in users:
+            data = users[user_id_str]
+            msg = f"📊 **YENİ LEVEL SİSTEMİ**\n\n"
+            msg += f"👤 @{username}\n"
+            msg += f"📊 Mesaj: {data['messages']}\n"
+            msg += f"🏆 Level: {data['level']}\n"
+            msg += f"📈 Sonraki level: {20 - (data['messages'] % 20)} mesaj kaldı"
+        else:
+            msg = f"❌ @{username} için henüz veri yok"
+        
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(msg, reply_markup=reply_markup)
     
     # ========== CALLBACK FONKSİYONLARI ==========
     async def rapor_callback(self, query, context):
@@ -385,7 +489,8 @@ class BadiniBot:
                 InlineKeyboardButton("🏆 level", callback_data="level")
             ],
             [
-                InlineKeyboardButton("💤 24h", callback_data="24h")
+                InlineKeyboardButton("💤 24h", callback_data="24h"),
+                InlineKeyboardButton("🧪 newlevel", callback_data="newlevel")
             ]
         ]
         
@@ -408,7 +513,7 @@ class BadiniBot:
             f"📊 داتایێن 24 سعەت و حەڤتیێ\n"
             f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
             f"📋 /top - مێنوی سەرەکی\n"
-            f"🔧 /debug - تاقیکرن\n"
+            f"🧪 /newlevel - یەن سیستەم\n"
             f"⏰ کاتی عێراق: {now.strftime('%H:%M')}"
         )
     
@@ -424,7 +529,6 @@ class BadiniBot:
         xp = total * 10
         level = self.level_system.calculate_level(xp)
         
-        import os
         levels_exist = os.path.exists('levels.json')
         
         msg = f"🔧 **DEBUG BİLGİLERİ**\n\n"
@@ -544,38 +648,30 @@ class BadiniBot:
         if not user:
             return
         
-        # Kullanıcıyı kaydet
+        # Mevcut sistem
         self.db.save_user(user.id, user.username, user.first_name)
-        
-        # Mesajı ekle
         self.db.add_message(user.id)
-        
-        # Cezayı sıfırla
         self.db.reset_penalty(user.id)
         
-        # Toplam mesaj sayısını bul
         total = self.db.get_total_message_count(user.id)
-        
-        # Seviye güncelle
         leveled_up, new_level = self.level_system.update_user(
             user.id, 
             user.username or user.first_name, 
             total
         )
         
-        # Level atladıysa bildirim gönder
         if leveled_up:
             emoji_id = self.level_system.get_level_emoji_id(new_level)
             display_name = f"@{user.username}" if user.username else user.first_name
-            
-            # Mesajı oluştur - emoji ID'si ile
             level_message = f"<emoji id={emoji_id}> دەستخوش بویە لیفل {new_level} <emoji id={emoji_id}>\n\n{display_name}"
-            
             await context.bot.send_message(
                 chat_id=GROUP_ID,
                 text=level_message,
                 parse_mode='HTML'
             )
+        
+        # YENİ LEVEL SİSTEMİ
+        await self.check_new_level(user.id, user.username, update, context)
     
     def run(self):
         app = Application.builder().token(TOKEN).build()
@@ -584,9 +680,10 @@ class BadiniBot:
         app.add_handler(CommandHandler("top", self.top))
         app.add_handler(CommandHandler("start", self.start))
         app.add_handler(CommandHandler("debug", self.debug))
+        app.add_handler(CommandHandler("newlevel", self.test_new_level))
         
         # Buton handler
-        app.add_handler(CallbackQueryHandler(self.button_handler, pattern="^(rapor|reload|top10|week|mont|saat|kalite|top7|me|level|24h)$"))
+        app.add_handler(CallbackQueryHandler(self.button_handler, pattern="^(rapor|reload|top10|week|mont|saat|kalite|top7|me|level|24h|newlevel)$"))
         app.add_handler(CallbackQueryHandler(self.back_to_menu, pattern="^back_to_menu$"))
         
         # Mesaj handler
@@ -630,6 +727,7 @@ class BadiniBot:
         
         logger.info(f"🚀 {self.msgs.BOT_NAME} başladı...")
         logger.info(f"📋 Butonlu menü aktif: /top")
+        logger.info(f"🧪 Yeni level sistemi aktif: Her 20 mesajda bir bildirim")
         app.run_polling()
 
 
