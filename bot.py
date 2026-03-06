@@ -264,6 +264,23 @@ class BadiniBot:
         
         await update.message.reply_text(msg, parse_mode='Markdown')
     
+    # ========== YENİ: ÜYE GÜNCELLEME KOMUTU ==========
+    async def update_members_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """🔄 /update - Tüm üyeleri güncelle (admin)"""
+        if not await self.check_group(update):
+            return
+        
+        if not self.db.is_admin(update.effective_user.id):
+            await update.message.reply_text(self.msgs.NOT_ADMIN)
+            return
+        
+        await update.message.reply_text("🔄 لیستا ئەندامان تازە دبیت... 1 دقیقە")
+        
+        count = await self.db.update_all_members(context)
+        
+        await update.message.reply_text(f"✅ {count} ئەندام هاتنە ناسین! ئەفرو /no24 بکە")
+    
+    # ========== CALLBACK FONKSİYONLARI ==========
     async def no24_callback(self, query, context):
         """Buton için no24 callback'i"""
         await query.edit_message_text("🔍 دەکۆڵمەوە... 24 سعەتێن پێشوو")
@@ -311,6 +328,93 @@ class BadiniBot:
         
         await query.edit_message_text(msg, reply_markup=reply_markup, parse_mode='Markdown')
     
+    async def aktif_callback(self, query, context):
+        """Buton için aktif callback'i"""
+        users = self.db.get_all_users()
+        now = datetime.now(IRAQ_TZ)
+        one_day_ago = now - timedelta(days=1)
+        
+        aktif = []
+        
+        for user_id, user_data in users.items():
+            last_seen_str = user_data.get('last_seen')
+            if not last_seen_str:
+                continue
+                
+            last_seen = datetime.fromisoformat(last_seen_str)
+            username = user_data.get('username')
+            first_name = user_data.get('first_name', '?')
+            user_id_int = user_data.get('user_id')
+            
+            if last_seen > one_day_ago:
+                if username:
+                    mention = f"@{username}"
+                else:
+                    mention = f"[{first_name}](tg://user?id={user_id_int})"
+                aktif.append(mention)
+        
+        if not aktif:
+            await query.edit_message_text("❌ 24 سعەتێن پێشوو کەس نامە نەرێکرە!")
+            return
+        
+        msg = f"👥 **ئەو {len(aktif)} کەسانە د 24 سعەتێ دا نامەیان رێکرە:**\n\n"
+        
+        for mention in aktif[:20]:
+            msg += f"• {mention}\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(msg, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def update_callback(self, query, context):
+        """Buton için update callback'i"""
+        await query.edit_message_text("🔄 لیستا ئەندامان تازە دبیت...")
+        count = await self.db.update_all_members(context)
+        
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(f"✅ {count} ئەندام هاتنە ناسین!", reply_markup=reply_markup)
+    
+    async def test_new_level_callback(self, query, context):
+        """Buton için newlevel callback'i"""
+        with open(self.new_levels_file, 'r') as f:
+            users = json.load(f)
+        
+        if not users:
+            await query.edit_message_text("❌ هێشتا داتا نینە!")
+            return
+        
+        sorted_users = sorted(users.items(), key=lambda x: x[1]['level'], reverse=True)
+        
+        msg = "📊 **لیستا لیفلا (Level Sıralaması)**\n\n"
+        
+        for i, (user_id, data) in enumerate(sorted_users[:15], 1):
+            if i == 1:
+                medal = "🥇"
+            elif i == 2:
+                medal = "🥈"
+            elif i == 3:
+                medal = "🥉"
+            else:
+                medal = f"{i}."
+            
+            if data['username']:
+                display_name = f"@{data['username']}"
+            else:
+                display_name = data['first_name']
+            
+            current_level = data['level']
+            required = (current_level * 10) + 10
+            progress = data['messages']
+            
+            msg += f"{medal} {display_name} - لیفل {current_level} ({progress}/{required} نامە)\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(msg, reply_markup=reply_markup)
+    
     # ========== BUTONLU MENÜ ==========
     async def top(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """📋 /top - Butonlu ana menü"""
@@ -343,6 +447,7 @@ class BadiniBot:
                 InlineKeyboardButton("👥 aktif", callback_data="aktif")
             ],
             [
+                InlineKeyboardButton("🔄 update", callback_data="update"),
                 InlineKeyboardButton("📊 لیفلا", callback_data="newlevel")
             ]
         ]
@@ -408,87 +513,16 @@ class BadiniBot:
         elif command == "aktif":
             await self.aktif_callback(query, context)
         
+        elif command == "update":
+            if self.db.is_admin(user_id):
+                await self.update_callback(query, context)
+            else:
+                await query.edit_message_text(self.msgs.NOT_ADMIN)
+        
         elif command == "newlevel":
             await self.test_new_level_callback(query, context)
     
-    async def aktif_callback(self, query, context):
-        """Buton için aktif callback'i"""
-        users = self.db.get_all_users()
-        now = datetime.now(IRAQ_TZ)
-        one_day_ago = now - timedelta(days=1)
-        
-        aktif = []
-        
-        for user_id, user_data in users.items():
-            last_seen_str = user_data.get('last_seen')
-            if not last_seen_str:
-                continue
-                
-            last_seen = datetime.fromisoformat(last_seen_str)
-            username = user_data.get('username')
-            first_name = user_data.get('first_name', '?')
-            user_id_int = user_data.get('user_id')
-            
-            if last_seen > one_day_ago:
-                if username:
-                    mention = f"@{username}"
-                else:
-                    mention = f"[{first_name}](tg://user?id={user_id_int})"
-                aktif.append(mention)
-        
-        if not aktif:
-            await query.edit_message_text("❌ 24 سعەتێن پێشوو کەس نامە نەرێکرە!")
-            return
-        
-        msg = f"👥 **ئەو {len(aktif)} کەسانە د 24 سعەتێ دا نامەیان رێکرە:**\n\n"
-        
-        for mention in aktif[:20]:
-            msg += f"• {mention}\n"
-        
-        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(msg, reply_markup=reply_markup, parse_mode='Markdown')
-    
-    async def test_new_level_callback(self, query, context):
-        """Buton için newlevel callback'i"""
-        with open(self.new_levels_file, 'r') as f:
-            users = json.load(f)
-        
-        if not users:
-            await query.edit_message_text("❌ هێشتا داتا نینە!")
-            return
-        
-        sorted_users = sorted(users.items(), key=lambda x: x[1]['level'], reverse=True)
-        
-        msg = "📊 **لیستا لیفلا (Level Sıralaması)**\n\n"
-        
-        for i, (user_id, data) in enumerate(sorted_users[:15], 1):
-            if i == 1:
-                medal = "🥇"
-            elif i == 2:
-                medal = "🥈"
-            elif i == 3:
-                medal = "🥉"
-            else:
-                medal = f"{i}."
-            
-            if data['username']:
-                display_name = f"@{data['username']}"
-            else:
-                display_name = data['first_name']
-            
-            current_level = data['level']
-            required = (current_level * 10) + 10
-            progress = data['messages']
-            
-            msg += f"{medal} {display_name} - لیفل {current_level} ({progress}/{required} نامە)\n"
-        
-        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(msg, reply_markup=reply_markup)
-    
-    # ========== CALLBACK FONKSİYONLARI ==========
+    # ========== DİĞER CALLBACK FONKSİYONLARI ==========
     async def rapor_callback(self, query, context):
         await query.edit_message_text(self.msgs.REPORT_PREPARING)
         
@@ -729,6 +763,7 @@ class BadiniBot:
                 InlineKeyboardButton("👥 aktif", callback_data="aktif")
             ],
             [
+                InlineKeyboardButton("🔄 update", callback_data="update"),
                 InlineKeyboardButton("📊 لیفلا", callback_data="newlevel")
             ]
         ]
@@ -754,6 +789,7 @@ class BadiniBot:
             f"📋 /top - مێنوی سەرەکی\n"
             f"🔔 /no24 - ئاگەهداریا بێدەنگان\n"
             f"👥 /aktif - لیستا ئاکتیڤان\n"
+            f"🔄 /update - تازەکرنا ئەندامان (ئەدمین)\n"
             f"📊 /newlevel - لیستا لیفلا\n"
             f"⏰ کاتی عێراق: {now.strftime('%H:%M')}"
         )
@@ -924,9 +960,10 @@ class BadiniBot:
         app.add_handler(CommandHandler("newlevel", self.test_new_level))
         app.add_handler(CommandHandler("no24", self.no24_command))
         app.add_handler(CommandHandler("aktif", self.aktif_command))
+        app.add_handler(CommandHandler("update", self.update_members_command))  # YENİ KOMUT
         
         # Buton handler
-        app.add_handler(CallbackQueryHandler(self.button_handler, pattern="^(rapor|reload|top10|week|mont|saat|kalite|top7|me|level|24h|no24|aktif|newlevel)$"))
+        app.add_handler(CallbackQueryHandler(self.button_handler, pattern="^(rapor|reload|top10|week|mont|saat|kalite|top7|me|level|24h|no24|aktif|newlevel|update)$"))
         app.add_handler(CallbackQueryHandler(self.back_to_menu, pattern="^back_to_menu$"))
         
         # Mesaj handler
@@ -972,6 +1009,7 @@ class BadiniBot:
         logger.info(f"📋 Butonlu menü aktif: /top")
         logger.info(f"🔔 /no24 - Pasifleri gösterir")
         logger.info(f"👥 /aktif - Aktifleri gösterir")
+        logger.info(f"🔄 /update - Tüm üyeleri günceller (admin)")
         app.run_polling()
 
 
