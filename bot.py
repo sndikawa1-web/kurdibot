@@ -14,9 +14,9 @@ from database import Database
 from levels import LevelSystem
 from utils import format_time, split_message
 
-# Loglama - DEBUG SEVİYESİNE AYARLANDI
+# Loglama
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout)
@@ -67,7 +67,6 @@ class BadiniBot:
         if not await self.check_group(update):
             return
         
-        # Butonları oluştur (2 sütunlu)
         keyboard = [
             [
                 InlineKeyboardButton("📋 rapor", callback_data="rapor"),
@@ -110,9 +109,6 @@ class BadiniBot:
         user_id = query.from_user.id
         command = query.data
         
-        logger.debug(f"Butona tıklandı: user={user_id}, command={command}")
-        
-        # Butona göre işlem yap
         if command == "rapor":
             if self.db.is_admin(user_id):
                 await self.rapor_callback(query, context)
@@ -152,7 +148,7 @@ class BadiniBot:
         elif command == "24h":
             await self.pasif_callback(query, context)
     
-    # ========== CALLBACK FONKSİYONLARI (Butonlar için) ==========
+    # ========== CALLBACK FONKSİYONLARI ==========
     async def rapor_callback(self, query, context):
         await query.edit_message_text(self.msgs.REPORT_PREPARING)
         
@@ -178,7 +174,6 @@ class BadiniBot:
             for username in inactive[:10]:
                 msg += f"• {username}\n"
         
-        # Geri dön butonu
         keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -425,12 +420,10 @@ class BadiniBot:
         user_id = update.effective_user.id
         username = update.effective_user.username or update.effective_user.first_name
         
-        # Toplam mesaj sayısı
         total = self.db.get_total_message_count(user_id)
         xp = total * 10
         level = self.level_system.calculate_level(xp)
         
-        # levels.json kontrolü
         import os
         levels_exist = os.path.exists('levels.json')
         
@@ -446,7 +439,7 @@ class BadiniBot:
                 with open('levels.json', 'r') as f:
                     data = json.load(f)
                     user_data = data.get(str(user_id), 'KAYIT YOK')
-                msg += f"👤 Kayıtlı level: {user_data}"
+                msg += f"👤 Kayıtlı: {user_data}"
             except:
                 msg += f"❌ Okuma hatası"
         
@@ -551,45 +544,38 @@ class BadiniBot:
         if not user:
             return
         
-        logger.debug(f"🔍 1. Kullanıcı kaydediliyor: {user.id}")
+        # Kullanıcıyı kaydet
         self.db.save_user(user.id, user.username, user.first_name)
         
-        logger.debug(f"🔍 2. Mesaj ekleniyor: {user.id}")
+        # Mesajı ekle
         self.db.add_message(user.id)
         
-        logger.debug(f"🔍 3. Ceza sıfırlanıyor: {user.id}")
+        # Cezayı sıfırla
         self.db.reset_penalty(user.id)
         
-        logger.debug(f"🔍 4. Toplam mesaj sayısı alınıyor: {user.id}")
+        # Toplam mesaj sayısını bul
         total = self.db.get_total_message_count(user.id)
-        logger.debug(f"🔍 4a. Toplam mesaj: {total}")
         
-        logger.debug(f"🔍 5. Seviye güncelleniyor: {user.id}")
+        # Seviye güncelle
         leveled_up, new_level = self.level_system.update_user(
             user.id, 
             user.username or user.first_name, 
             total
         )
-        logger.debug(f"🔍 5a. leveled_up={leveled_up}, new_level={new_level}")
         
+        # Level atladıysa bildirim gönder
         if leveled_up:
-            logger.debug(f"🔍 6. Level atlama bildirimi gönderiliyor: {new_level}")
             emoji_id = self.level_system.get_level_emoji_id(new_level)
             display_name = f"@{user.username}" if user.username else user.first_name
             
+            # Mesajı oluştur - emoji ID'si ile
+            level_message = f"<emoji id={emoji_id}> دەستخوش بویە لیفل {new_level} <emoji id={emoji_id}>\n\n{display_name}"
+            
             await context.bot.send_message(
                 chat_id=GROUP_ID,
-                text=self.msgs.LEVEL_UP.format(
-                    f"<emoji id={emoji_id}>",
-                    new_level,
-                    f"<emoji id={emoji_id}>",
-                    f"{display_name} {new_level}"
-                ),
+                text=level_message,
                 parse_mode='HTML'
             )
-            logger.debug(f"🔍 6a. Bildirim gönderildi")
-        
-        logger.debug(f"✅ İşlem tamam: {user.id}")
     
     def run(self):
         app = Application.builder().token(TOKEN).build()
