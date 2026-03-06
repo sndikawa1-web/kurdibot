@@ -118,7 +118,8 @@ class BadiniBot:
             next_required = (new_level * 10) + 10
             await context.bot.send_message(
                 chat_id=GROUP_ID,
-                text=f"{emoji_id} دەستخوش بویە لیفل {new_level} {emoji_id}\n📊 بۆ لیفلی دویە {next_required} نامە پێویستە"
+                text=f"<emoji id={emoji_id}> دەستخوش بویە لیفل {new_level} <emoji id={emoji_id}>\n📊 بۆ لیفلی دویە {next_required} نامە پێویستە",
+                parse_mode='HTML'
             )
         
         # Kaydet
@@ -168,6 +169,58 @@ class BadiniBot:
         
         await update.message.reply_text(msg)
     
+    # ========== NO24 KOMUTU - 24 SAAT KONUŞMAYANLARI ETİKETLE ==========
+    async def no24_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """🔔 /no24 - 24 saat konuşmayanları etiketle"""
+        if not await self.check_group(update):
+            return
+        
+        # Sadece adminler kullanabilsin
+        if not self.db.is_admin(update.effective_user.id):
+            await update.message.reply_text(self.msgs.NOT_ADMIN)
+            return
+        
+        await update.message.reply_text("🔍 دەکۆڵمەوە... 24 سعەتێن پێشوو")
+        
+        # 24 saat konuşmayanları getir (detaylı versiyon)
+        inactive_users = self.db.get_inactive_users_detailed()
+        
+        if not inactive_users:
+            await update.message.reply_text("✅ تو هەمی ئەندامان د 24 سعەتێ دا نامە رێکرە! پیروزی")
+            return
+        
+        # Mesajı oluştur
+        msg = "🔔 **ئاگەهداری!** ئەم کەسانە د 24 سعەتێ دا نامە نەرێکرین:\n\n"
+        
+        for user_id, mention in inactive_users[:15]:  # En fazla 15 kişi
+            msg += f"• {mention}\n"
+        
+        msg += "\n📢 تکایە بەشداری بکەن!"
+        
+        await update.message.reply_text(msg, parse_mode='Markdown')
+    
+    async def no24_callback(self, query, context):
+        """Buton için no24 callback'i"""
+        await query.edit_message_text("🔍 دەکۆڵمەوە... 24 سعەتێن پێشوو")
+        
+        inactive_users = self.db.get_inactive_users_detailed()
+        
+        if not inactive_users:
+            await query.edit_message_text("✅ تو هەمی ئەندامان د 24 سعەتێ دا نامە رێکرە! پیروزی")
+            return
+        
+        msg = "🔔 **ئاگەهداری!** ئەم کەسانە د 24 سعەتێ دا نامە نەرێکرین:\n\n"
+        
+        for user_id, mention in inactive_users[:15]:
+            msg += f"• {mention}\n"
+        
+        msg += "\n📢 تکایە بەشداری بکەن!"
+        
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(msg, reply_markup=reply_markup, parse_mode='Markdown')
+    
     # ========== BUTONLU MENÜ ==========
     async def top(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """📋 /top - Butonlu ana menü"""
@@ -196,7 +249,10 @@ class BadiniBot:
                 InlineKeyboardButton("🏆 level", callback_data="level")
             ],
             [
-                InlineKeyboardButton("💤 24h", callback_data="24h"),
+                InlineKeyboardButton("🔔 no24", callback_data="no24"),
+                InlineKeyboardButton("💤 24h", callback_data="24h")
+            ],
+            [
                 InlineKeyboardButton("📊 لیفلا", callback_data="newlevel")
             ]
         ]
@@ -255,6 +311,12 @@ class BadiniBot:
         
         elif command == "24h":
             await self.pasif_callback(query, context)
+        
+        elif command == "no24":
+            if self.db.is_admin(user_id):
+                await self.no24_callback(query, context)
+            else:
+                await query.edit_message_text(self.msgs.NOT_ADMIN)
         
         elif command == "newlevel":
             await self.test_new_level_callback(query, context)
@@ -534,7 +596,10 @@ class BadiniBot:
                 InlineKeyboardButton("🏆 level", callback_data="level")
             ],
             [
-                InlineKeyboardButton("💤 24h", callback_data="24h"),
+                InlineKeyboardButton("🔔 no24", callback_data="no24"),
+                InlineKeyboardButton("💤 24h", callback_data="24h")
+            ],
+            [
                 InlineKeyboardButton("📊 لیفلا", callback_data="newlevel")
             ]
         ]
@@ -558,6 +623,7 @@ class BadiniBot:
             f"📊 داتایێن 24 سعەت و حەڤتیێ\n"
             f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
             f"📋 /top - مێنوی سەرەکی\n"
+            f"🔔 /no24 - ئاگەهداریا بێدەنگان\n"
             f"📊 /newlevel - لیستا لیفلا\n"
             f"⏰ کاتی عێراق: {now.strftime('%H:%M')}"
         )
@@ -708,7 +774,7 @@ class BadiniBot:
         if leveled_up:
             emoji_id = self.level_system.get_level_emoji_id(new_level)
             display_name = f"@{user.username}" if user.username else user.first_name
-            level_message = f"{emoji_id} دەستخوش بویە لیفل {new_level} {emoji_id}\n\n{display_name}"
+            level_message = f"<emoji id={emoji_id}> دەستخوش بویە لیفل {new_level} <emoji id={emoji_id}>\n\n{display_name}"
             await context.bot.send_message(
                 chat_id=GROUP_ID,
                 text=level_message,
@@ -726,9 +792,10 @@ class BadiniBot:
         app.add_handler(CommandHandler("start", self.start))
         app.add_handler(CommandHandler("debug", self.debug))
         app.add_handler(CommandHandler("newlevel", self.test_new_level))
+        app.add_handler(CommandHandler("no24", self.no24_command))  # YENİ KOMUT
         
         # Buton handler
-        app.add_handler(CallbackQueryHandler(self.button_handler, pattern="^(rapor|reload|top10|week|mont|saat|kalite|top7|me|level|24h|newlevel)$"))
+        app.add_handler(CallbackQueryHandler(self.button_handler, pattern="^(rapor|reload|top10|week|mont|saat|kalite|top7|me|level|24h|no24|newlevel)$"))
         app.add_handler(CallbackQueryHandler(self.back_to_menu, pattern="^back_to_menu$"))
         
         # Mesaj handler
@@ -772,6 +839,7 @@ class BadiniBot:
         
         logger.info(f"🚀 {self.msgs.BOT_NAME} başladı...")
         logger.info(f"📋 Butonlu menü aktif: /top")
+        logger.info(f"🔔 /no24 komutu eklendi - 24 saat konuşmayanları etiketler")
         logger.info(f"📊 Yeni level sistemi: Her levelde +10 mesaj artar, her levelde bildirim")
         app.run_polling()
 
