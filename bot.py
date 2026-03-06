@@ -4,7 +4,7 @@ import sys
 import json
 import logging
 import asyncio
-from datetime import datetime, time
+from datetime import datetime, timedelta, time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, CallbackQueryHandler, ContextTypes
 
@@ -169,9 +169,9 @@ class BadiniBot:
         
         await update.message.reply_text(msg)
     
-    # ========== NO24 KOMUTU - 24 SAAT KONUŞMAYANLARI ETİKETLE ==========
+    # ========== AKTİF/PASİF KOMUTLARI ==========
     async def no24_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """🔔 /no24 - 24 saat konuşmayanları etiketle"""
+        """🔔 /no24 - 24 saat konuşmayanları etiketle (pasifler)"""
         if not await self.check_group(update):
             return
         
@@ -182,20 +182,85 @@ class BadiniBot:
         
         await update.message.reply_text("🔍 دەکۆڵمەوە... 24 سعەتێن پێشوو")
         
-        # 24 saat konuşmayanları getir (detaylı versiyon)
-        inactive_users = self.db.get_inactive_users_detailed()
+        # Tüm kullanıcıları al
+        users = self.db.get_all_users()
+        now = datetime.now(IRAQ_TZ)
+        one_day_ago = now - timedelta(days=1)
         
-        if not inactive_users:
-            await update.message.reply_text("✅ تو هەمی ئەندامان د 24 سعەتێ دا نامە رێکرە! پیروزی")
+        pasif = []
+        toplam = 0
+        
+        for user_id, user_data in users.items():
+            toplam += 1
+            last_seen_str = user_data.get('last_seen')
+            
+            # Eğer last_seen yoksa veya eskiyse
+            if not last_seen_str:
+                continue
+                
+            last_seen = datetime.fromisoformat(last_seen_str)
+            username = user_data.get('username')
+            first_name = user_data.get('first_name', '?')
+            user_id_int = user_data.get('user_id')
+            
+            # Son 24 saat içinde mesaj atmamışsa
+            if last_seen < one_day_ago:
+                if username:
+                    mention = f"@{username}"
+                else:
+                    mention = f"[{first_name}](tg://user?id={user_id_int})"
+                pasif.append(mention)
+        
+        if not pasif:
+            await update.message.reply_text(f"✅ تو هەمی {toplam} ئەندامان د 24 سعەتێ دا نامە رێکرە! پیروزی")
             return
         
         # Mesajı oluştur
-        msg = "🔔 **ئاگەهداری!** ئەم کەسانە د 24 سعەتێ دا نامە نەرێکرین:\n\n"
+        msg = f"🔔 **ئاگەهداری!** ئەم {len(pasif)} کەسانە د 24 سعەتێ دا نامە نەرێکرین:\n\n"
         
-        for user_id, mention in inactive_users[:15]:  # En fazla 15 kişi
+        for mention in pasif[:15]:  # En fazla 15 kişi
             msg += f"• {mention}\n"
         
-        msg += "\n📢 تکایە بەشداری بکەن!"
+        msg += f"\n📊 کۆی گشتی: {toplam} ئەندام، {len(pasif)} بێدەنگ"
+        
+        await update.message.reply_text(msg, parse_mode='Markdown')
+    
+    async def aktif_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """👥 /aktif - 24 saat içinde aktif olanları listele"""
+        if not await self.check_group(update):
+            return
+        
+        users = self.db.get_all_users()
+        now = datetime.now(IRAQ_TZ)
+        one_day_ago = now - timedelta(days=1)
+        
+        aktif = []
+        
+        for user_id, user_data in users.items():
+            last_seen_str = user_data.get('last_seen')
+            if not last_seen_str:
+                continue
+                
+            last_seen = datetime.fromisoformat(last_seen_str)
+            username = user_data.get('username')
+            first_name = user_data.get('first_name', '?')
+            user_id_int = user_data.get('user_id')
+            
+            if last_seen > one_day_ago:
+                if username:
+                    mention = f"@{username}"
+                else:
+                    mention = f"[{first_name}](tg://user?id={user_id_int})"
+                aktif.append(mention)
+        
+        if not aktif:
+            await update.message.reply_text("❌ 24 سعەتێن پێشوو کەس نامە نەرێکرە!")
+            return
+        
+        msg = f"👥 **ئەو {len(aktif)} کەسانە د 24 سعەتێ دا نامەیان رێکرە:**\n\n"
+        
+        for mention in aktif[:20]:
+            msg += f"• {mention}\n"
         
         await update.message.reply_text(msg, parse_mode='Markdown')
     
@@ -203,18 +268,43 @@ class BadiniBot:
         """Buton için no24 callback'i"""
         await query.edit_message_text("🔍 دەکۆڵمەوە... 24 سعەتێن پێشوو")
         
-        inactive_users = self.db.get_inactive_users_detailed()
+        # Tüm kullanıcıları al
+        users = self.db.get_all_users()
+        now = datetime.now(IRAQ_TZ)
+        one_day_ago = now - timedelta(days=1)
         
-        if not inactive_users:
-            await query.edit_message_text("✅ تو هەمی ئەندامان د 24 سعەتێ دا نامە رێکرە! پیروزی")
+        pasif = []
+        toplam = 0
+        
+        for user_id, user_data in users.items():
+            toplam += 1
+            last_seen_str = user_data.get('last_seen')
+            
+            if not last_seen_str:
+                continue
+                
+            last_seen = datetime.fromisoformat(last_seen_str)
+            username = user_data.get('username')
+            first_name = user_data.get('first_name', '?')
+            user_id_int = user_data.get('user_id')
+            
+            if last_seen < one_day_ago:
+                if username:
+                    mention = f"@{username}"
+                else:
+                    mention = f"[{first_name}](tg://user?id={user_id_int})"
+                pasif.append(mention)
+        
+        if not pasif:
+            await query.edit_message_text(f"✅ تو هەمی {toplam} ئەندامان د 24 سعەتێ دا نامە رێکرە! پیروزی")
             return
         
-        msg = "🔔 **ئاگەهداری!** ئەم کەسانە د 24 سعەتێ دا نامە نەرێکرین:\n\n"
+        msg = f"🔔 **ئاگەهداری!** ئەم {len(pasif)} کەسانە د 24 سعەتێ دا نامە نەرێکرین:\n\n"
         
-        for user_id, mention in inactive_users[:15]:
+        for mention in pasif[:15]:
             msg += f"• {mention}\n"
         
-        msg += "\n📢 تکایە بەشداری بکەن!"
+        msg += f"\n📊 کۆی گشتی: {toplam} ئەندام، {len(pasif)} بێدەنگ"
         
         keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -250,7 +340,7 @@ class BadiniBot:
             ],
             [
                 InlineKeyboardButton("🔔 no24", callback_data="no24"),
-                InlineKeyboardButton("💤 24h", callback_data="24h")
+                InlineKeyboardButton("👥 aktif", callback_data="aktif")
             ],
             [
                 InlineKeyboardButton("📊 لیفلا", callback_data="newlevel")
@@ -309,17 +399,56 @@ class BadiniBot:
         elif command == "level":
             await self.level_ranking_callback(query, context)
         
-        elif command == "24h":
-            await self.pasif_callback(query, context)
-        
         elif command == "no24":
             if self.db.is_admin(user_id):
                 await self.no24_callback(query, context)
             else:
                 await query.edit_message_text(self.msgs.NOT_ADMIN)
         
+        elif command == "aktif":
+            await self.aktif_callback(query, context)
+        
         elif command == "newlevel":
             await self.test_new_level_callback(query, context)
+    
+    async def aktif_callback(self, query, context):
+        """Buton için aktif callback'i"""
+        users = self.db.get_all_users()
+        now = datetime.now(IRAQ_TZ)
+        one_day_ago = now - timedelta(days=1)
+        
+        aktif = []
+        
+        for user_id, user_data in users.items():
+            last_seen_str = user_data.get('last_seen')
+            if not last_seen_str:
+                continue
+                
+            last_seen = datetime.fromisoformat(last_seen_str)
+            username = user_data.get('username')
+            first_name = user_data.get('first_name', '?')
+            user_id_int = user_data.get('user_id')
+            
+            if last_seen > one_day_ago:
+                if username:
+                    mention = f"@{username}"
+                else:
+                    mention = f"[{first_name}](tg://user?id={user_id_int})"
+                aktif.append(mention)
+        
+        if not aktif:
+            await query.edit_message_text("❌ 24 سعەتێن پێشوو کەس نامە نەرێکرە!")
+            return
+        
+        msg = f"👥 **ئەو {len(aktif)} کەسانە د 24 سعەتێ دا نامەیان رێکرە:**\n\n"
+        
+        for mention in aktif[:20]:
+            msg += f"• {mention}\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(msg, reply_markup=reply_markup, parse_mode='Markdown')
     
     async def test_new_level_callback(self, query, context):
         """Buton için newlevel callback'i"""
@@ -597,7 +726,7 @@ class BadiniBot:
             ],
             [
                 InlineKeyboardButton("🔔 no24", callback_data="no24"),
-                InlineKeyboardButton("💤 24h", callback_data="24h")
+                InlineKeyboardButton("👥 aktif", callback_data="aktif")
             ],
             [
                 InlineKeyboardButton("📊 لیفلا", callback_data="newlevel")
@@ -624,6 +753,7 @@ class BadiniBot:
             f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
             f"📋 /top - مێنوی سەرەکی\n"
             f"🔔 /no24 - ئاگەهداریا بێدەنگان\n"
+            f"👥 /aktif - لیستا ئاکتیڤان\n"
             f"📊 /newlevel - لیستا لیفلا\n"
             f"⏰ کاتی عێراق: {now.strftime('%H:%M')}"
         )
@@ -792,10 +922,11 @@ class BadiniBot:
         app.add_handler(CommandHandler("start", self.start))
         app.add_handler(CommandHandler("debug", self.debug))
         app.add_handler(CommandHandler("newlevel", self.test_new_level))
-        app.add_handler(CommandHandler("no24", self.no24_command))  # YENİ KOMUT
+        app.add_handler(CommandHandler("no24", self.no24_command))
+        app.add_handler(CommandHandler("aktif", self.aktif_command))
         
         # Buton handler
-        app.add_handler(CallbackQueryHandler(self.button_handler, pattern="^(rapor|reload|top10|week|mont|saat|kalite|top7|me|level|24h|no24|newlevel)$"))
+        app.add_handler(CallbackQueryHandler(self.button_handler, pattern="^(rapor|reload|top10|week|mont|saat|kalite|top7|me|level|24h|no24|aktif|newlevel)$"))
         app.add_handler(CallbackQueryHandler(self.back_to_menu, pattern="^back_to_menu$"))
         
         # Mesaj handler
@@ -839,8 +970,8 @@ class BadiniBot:
         
         logger.info(f"🚀 {self.msgs.BOT_NAME} başladı...")
         logger.info(f"📋 Butonlu menü aktif: /top")
-        logger.info(f"🔔 /no24 komutu eklendi - 24 saat konuşmayanları etiketler")
-        logger.info(f"📊 Yeni level sistemi: Her levelde +10 mesaj artar, her levelde bildirim")
+        logger.info(f"🔔 /no24 - Pasifleri gösterir")
+        logger.info(f"👥 /aktif - Aktifleri gösterir")
         app.run_polling()
 
 
