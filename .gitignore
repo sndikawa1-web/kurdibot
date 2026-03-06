@@ -1,4 +1,4 @@
-# JSON veritabanı dosyaları (BUNLARI EKLE!)
+# JSON veritabanı dosyaları (BUNLAR ASLA GITHUB'A GİTMESİN!)
 *.json
 !requirements.txt
 !railway.json
@@ -9,3 +9,6 @@ __pycache__/
 *.pyo
 *.pyd
 *.log
+.env
+venv/
+env/
