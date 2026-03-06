@@ -17,7 +17,7 @@ from utils import format_time, split_message
 # Loglama
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout)
     ]
@@ -73,7 +73,7 @@ class BadiniBot:
     
     # ========== YENİ LEVEL SİSTEMİ ==========
     async def check_new_level(self, user_id, username, update, context):
-        """YENİ level sistemi - her mesajda çağrılacak"""
+        """YENİ level sistemi - her levelde 10 mesaj artar"""
         
         # Dosyayı oku
         with open(self.new_levels_file, 'r') as f:
@@ -92,20 +92,25 @@ class BadiniBot:
         # Mesaj sayısını artır
         users[user_id_str]['messages'] += 1
         message_count = users[user_id_str]['messages']
+        current_level = users[user_id_str]['level']
         
-        # Yeni level hesapla (her 20 mesajda bir level)
-        new_level = 1 + (message_count // 20)
-        old_level = users[user_id_str]['level']
+        # Bu level için gereken mesaj sayısı: (current_level × 10) + 10
+        required_messages = (current_level * 10) + 10
         
-        # Level atladı mı?
-        if new_level > old_level:
+        # Level atlama kontrolü
+        if message_count >= required_messages:
+            # Yeni level
+            new_level = current_level + 1
             users[user_id_str]['level'] = new_level
+            users[user_id_str]['messages'] = message_count - required_messages  # Kalan mesajları say
             
             # BİLDİRİM GÖNDER
             display_name = f"@{username}" if username else f"Kullanıcı"
+            next_required = (new_level * 10) + 10
+            
             await context.bot.send_message(
                 chat_id=GROUP_ID,
-                text=f"🎉 {display_name} Level {new_level} oldu! (Yeni Sistem)"
+                text=f"🎉 {display_name} Level {new_level} oldu! 🎉\n📊 Sonraki level için {next_required} mesaj gerekiyor."
             )
         
         # Kaydet
@@ -126,11 +131,14 @@ class BadiniBot:
         
         if user_id in users:
             data = users[user_id]
+            current_level = data['level']
+            required = (current_level * 10) + 10
             msg = f"📊 **YENİ LEVEL SİSTEMİ**\n\n"
             msg += f"👤 @{username}\n"
-            msg += f"📊 Mesaj: {data['messages']}\n"
-            msg += f"🏆 Level: {data['level']}\n"
-            msg += f"📈 Sonraki level: {20 - (data['messages'] % 20)} mesaj kaldı"
+            msg += f"📊 Bu level'deki mesaj: {data['messages']}\n"
+            msg += f"🏆 Mevcut Level: {data['level']}\n"
+            msg += f"📈 Bu level için gereken: {required} mesaj\n"
+            msg += f"🎯 Kalan mesaj: {required - data['messages']}"
         else:
             msg = f"❌ @{username} için henüz veri yok"
         
@@ -165,7 +173,7 @@ class BadiniBot:
             ],
             [
                 InlineKeyboardButton("💤 24h", callback_data="24h"),
-                InlineKeyboardButton("🧪 newlevel", callback_data="newlevel")
+                InlineKeyboardButton("🧪 yeni level", callback_data="newlevel")
             ]
         ]
         
@@ -240,11 +248,14 @@ class BadiniBot:
         
         if user_id_str in users:
             data = users[user_id_str]
+            current_level = data['level']
+            required = (current_level * 10) + 10
             msg = f"📊 **YENİ LEVEL SİSTEMİ**\n\n"
             msg += f"👤 @{username}\n"
-            msg += f"📊 Mesaj: {data['messages']}\n"
-            msg += f"🏆 Level: {data['level']}\n"
-            msg += f"📈 Sonraki level: {20 - (data['messages'] % 20)} mesaj kaldı"
+            msg += f"📊 Bu level'deki mesaj: {data['messages']}\n"
+            msg += f"🏆 Mevcut Level: {data['level']}\n"
+            msg += f"📈 Bu level için gereken: {required} mesaj\n"
+            msg += f"🎯 Kalan mesaj: {required - data['messages']}"
         else:
             msg = f"❌ @{username} için henüz veri yok"
         
@@ -490,7 +501,7 @@ class BadiniBot:
             ],
             [
                 InlineKeyboardButton("💤 24h", callback_data="24h"),
-                InlineKeyboardButton("🧪 newlevel", callback_data="newlevel")
+                InlineKeyboardButton("🧪 yeni level", callback_data="newlevel")
             ]
         ]
         
@@ -513,7 +524,7 @@ class BadiniBot:
             f"📊 داتایێن 24 سعەت و حەڤتیێ\n"
             f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
             f"📋 /top - مێنوی سەرەکی\n"
-            f"🧪 /newlevel - یەن سیستەم\n"
+            f"🧪 /newlevel - سیستەمی نوێ\n"
             f"⏰ کاتی عێراق: {now.strftime('%H:%M')}"
         )
     
@@ -648,7 +659,7 @@ class BadiniBot:
         if not user:
             return
         
-        # Mevcut sistem
+        # Mevcut sistem (eski level sistemi)
         self.db.save_user(user.id, user.username, user.first_name)
         self.db.add_message(user.id)
         self.db.reset_penalty(user.id)
@@ -670,7 +681,7 @@ class BadiniBot:
                 parse_mode='HTML'
             )
         
-        # YENİ LEVEL SİSTEMİ
+        # YENİ LEVEL SİSTEMİ (her levelde bildirimli)
         await self.check_new_level(user.id, user.username, update, context)
     
     def run(self):
@@ -727,7 +738,7 @@ class BadiniBot:
         
         logger.info(f"🚀 {self.msgs.BOT_NAME} başladı...")
         logger.info(f"📋 Butonlu menü aktif: /top")
-        logger.info(f"🧪 Yeni level sistemi aktif: Her 20 mesajda bir bildirim")
+        logger.info(f"🧪 Yeni level sistemi: Her levelde +10 mesaj artar, her levelde bildirim")
         app.run_polling()
 
 
