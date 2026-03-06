@@ -49,6 +49,42 @@ class Database:
         with open(self.users_file, 'r', encoding='utf-8') as f:
             return json.load(f)
     
+    # ========== YENİ: TÜM ÜYELERİ ÇEK ==========
+    async def update_all_members(self, context):
+        """Gruptaki TÜM üyeleri çek (mesaj atmayanlar dahil)"""
+        try:
+            from telegram.error import TelegramError
+            all_members = []
+            
+            # Tüm üyeleri çek (bot için özel yöntem)
+            async for member in context.bot.get_chat_members(GROUP_ID):
+                all_members.append(member)
+            
+            with open(self.users_file, 'r', encoding='utf-8') as f:
+                users = json.load(f)
+            
+            for member in all_members:
+                user = member.user
+                user_id = str(user.id)
+                
+                if user_id not in users:
+                    # Yeni üye, hiç mesaj atmamış
+                    users[user_id] = {
+                        'username': user.username,
+                        'first_name': user.first_name,
+                        'user_id': user.id,
+                        'last_seen': '2000-01-01T00:00:00+03:00',  # Çok eski tarih
+                        'joined_date': datetime.now(IRAQ_TZ).isoformat()
+                    }
+            
+            with open(self.users_file, 'w', encoding='utf-8') as f:
+                json.dump(users, f, ensure_ascii=False, indent=2)
+            
+            return len(all_members)
+        except Exception as e:
+            print(f"❌ Üye güncelleme hatası: {e}")
+            return 0
+    
     # ========== MESAJ İŞLEMLERİ ==========
     def add_message(self, user_id):
         today = datetime.now(IRAQ_TZ).strftime("%Y-%m-%d")
@@ -144,7 +180,7 @@ class Database:
         
         return inactive
     
-    # ========== YENİ: DETAYLI PASİF KULLANICILAR (Etiketli) ==========
+    # ========== DETAYLI PASİF KULLANICILAR (Etiketli) ==========
     def get_inactive_users_detailed(self):
         """24 saat konuşmayanları detaylı getir (user_id ve mention ile)"""
         users = self.get_all_users()
