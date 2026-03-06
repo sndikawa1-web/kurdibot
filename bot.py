@@ -3,8 +3,8 @@ import os
 import logging
 import asyncio
 from datetime import datetime, time
-from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, CommandHandler, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, MessageHandler, filters, CommandHandler, CallbackQueryHandler, ContextTypes
 
 from config import TOKEN, GROUP_ID, IRAQ_TZ
 from messages import Messages
@@ -21,7 +21,6 @@ class BadiniBot:
         self.msgs = Messages()
         self.level_system = LevelSystem(self.db)
         self.first_run = True
-        self.user_state = {}  # Kullanıcıların menü durumu
     
     async def check_group(self, update: Update):
         if update.effective_chat.type == 'private':
@@ -52,107 +51,98 @@ class BadiniBot:
         except Exception as e:
             logging.error(f"Admin güncelleme hatası: {e}")
     
-    # ========== TOP MENU KOMUTU ==========
+    # ========== BUTONLU MENÜ ==========
     async def top(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """📋 /top - Ana menü"""
+        """📋 /top - Butonlu ana menü"""
         if not await self.check_group(update):
             return
         
-        user_id = update.effective_user.id
+        # Butonları oluştur (2 sütunlu)
+        keyboard = [
+            [
+                InlineKeyboardButton("📋 rapor", callback_data="rapor"),
+                InlineKeyboardButton("🔄 reload", callback_data="reload")
+            ],
+            [
+                InlineKeyboardButton("📊 top10", callback_data="top10"),
+                InlineKeyboardButton("📈 week", callback_data="week")
+            ],
+            [
+                InlineKeyboardButton("📅 mont", callback_data="mont"),
+                InlineKeyboardButton("⏰ saat", callback_data="saat")
+            ],
+            [
+                InlineKeyboardButton("⭐️ kalite", callback_data="kalite"),
+                InlineKeyboardButton("👑 top7", callback_data="top7")
+            ],
+            [
+                InlineKeyboardButton("👤 me", callback_data="me"),
+                InlineKeyboardButton("🏆 level", callback_data="level")
+            ],
+            [
+                InlineKeyboardButton("💤 24h", callback_data="24h")
+            ]
+        ]
         
-        menu_text = f"{self.msgs.TOP_MENU_TITLE}\n{self.msgs.TOP_MENU_OPTIONS}\n{self.msgs.TOP_MENU_PROMPT}"
-        self.user_state[user_id] = "main_menu"
+        reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await update.message.reply_text(menu_text)
-    
-    async def handle_menu_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Menüden gelen seçimleri işle"""
-        if update.effective_chat.id != GROUP_ID:
-            return False
-        
-        user_id = update.effective_user.id
-        
-        if user_id not in self.user_state:
-            return False
-        
-        text = update.message.text.strip()
-        
-        if not text.isdigit():
-            await update.message.reply_text(self.msgs.TOP_MENU_INVALID)
-            return True
-        
-        choice = int(text)
-        
-        if choice < 1 or choice > 11:
-            await update.message.reply_text(self.msgs.TOP_MENU_INVALID)
-            return True
-        
-        # Kullanıcı durumunu temizle
-        del self.user_state[user_id]
-        
-        # Seçime göre işlem yap
-        if choice == 1:  # Admin Raporu
-            if self.db.is_admin(user_id):
-                await self.rapor(update, context)
-            else:
-                await update.message.reply_text(self.msgs.NOT_ADMIN)
-        
-        elif choice == 2:  # Admin Güncelle
-            if self.db.is_admin(user_id):
-                await self.reload(update, context)
-            else:
-                await update.message.reply_text(self.msgs.NOT_ADMIN)
-        
-        elif choice == 3:  # Top 10 Messages
-            await self.top10(update, context)
-        
-        elif choice == 4:  # Weekly Ranking
-            await self.weekly(update, context)
-        
-        elif choice == 5:  # Monthly Ranking
-            await self.monthly(update, context)
-        
-        elif choice == 6:  # Active Hours
-            await self.active_hours(update, context)
-        
-        elif choice == 7:  # Group Quality
-            await self.quality(update, context)
-        
-        elif choice == 8:  # Weekly Champion
-            await self.weekly_champ(update, context)
-        
-        elif choice == 9:  # My Level
-            await self.level(update, context)
-        
-        elif choice == 10:  # Level Ranking
-            await self.level_ranking(update, context)
-        
-        elif choice == 11:  # 24h Passive
-            await self.pasif(update, context)
-        
-        return True
-    
-    # ========== ESKİ KOMUTLAR (FONKSİYONLAR) ==========
-    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not await self.check_group(update):
-            return
-        
-        now = datetime.now(IRAQ_TZ)
         await update.message.reply_text(
-            f"👋 {self.msgs.WELCOME}\n\n"
-            f"{self.msgs.BOT_NAME}\n\n"
-            f"📊 داتایێن 24 سعەت و حەڤتیێ\n"
-            f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
-            f"📋 /top - مێنوی سەرەکی\n"
-            f"⏰ کاتی عێراق: {now.strftime('%H:%M')}"
+            "📋 **مێنو**\n\nکلیکە ل سەر یەکێک ژ دوکمەکان:",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
         )
     
-    async def rapor(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not self.db.is_admin(update.effective_user.id):
-            await update.message.reply_text(self.msgs.NOT_ADMIN)
-            return
+    async def button_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Butonlara tıklanınca çalışır"""
+        query = update.callback_query
+        await query.answer()
         
-        await update.message.reply_text(self.msgs.REPORT_PREPARING)
+        user_id = query.from_user.id
+        command = query.data
+        
+        # Butona göre işlem yap
+        if command == "rapor":
+            if self.db.is_admin(user_id):
+                await self.rapor_callback(query, context)
+            else:
+                await query.edit_message_text(self.msgs.NOT_ADMIN)
+        
+        elif command == "reload":
+            if self.db.is_admin(user_id):
+                await self.reload_callback(query, context)
+            else:
+                await query.edit_message_text(self.msgs.NOT_ADMIN)
+        
+        elif command == "top10":
+            await self.top10_callback(query, context)
+        
+        elif command == "week":
+            await self.weekly_callback(query, context)
+        
+        elif command == "mont":
+            await self.monthly_callback(query, context)
+        
+        elif command == "saat":
+            await self.active_hours_callback(query, context)
+        
+        elif command == "kalite":
+            await self.quality_callback(query, context)
+        
+        elif command == "top7":
+            await self.weekly_champ_callback(query, context)
+        
+        elif command == "me":
+            await self.level_callback(query, context)
+        
+        elif command == "level":
+            await self.level_ranking_callback(query, context)
+        
+        elif command == "24h":
+            await self.pasif_callback(query, context)
+    
+    # ========== CALLBACK FONKSİYONLARI (Butonlar için) ==========
+    async def rapor_callback(self, query, context):
+        await query.edit_message_text(self.msgs.REPORT_PREPARING)
         
         all_users = self.db.get_all_users_message_counts(24)
         inactive = self.db.get_inactive_users_24h()
@@ -176,32 +166,38 @@ class BadiniBot:
             for username in inactive[:10]:
                 msg += f"• {username}\n"
         
-        await update.message.reply_text(msg)
-    
-    async def reload(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not self.db.is_admin(update.effective_user.id):
-            await update.message.reply_text(self.msgs.NOT_ADMIN)
-            return
+        # Geri dön butonu
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await update.message.reply_text(self.msgs.ADMIN_UPDATING)
-        await self.update_admins(context)
-        await update.message.reply_text(self.msgs.ADMIN_UPDATED)
+        await query.edit_message_text(msg, reply_markup=reply_markup)
     
-    async def top10(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def reload_callback(self, query, context):
+        await query.edit_message_text(self.msgs.ADMIN_UPDATING)
+        await self.update_admins(context)
+        
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(self.msgs.ADMIN_UPDATED, reply_markup=reply_markup)
+    
+    async def top10_callback(self, query, context):
         all_users = self.db.get_all_users_message_counts(24)
         
         if not all_users:
-            await update.message.reply_text(f"📊 {self.msgs.TOP10}\n\n{self.msgs.NO_MESSAGES}")
-            return
+            msg = f"📊 {self.msgs.TOP10}\n\n{self.msgs.NO_MESSAGES}"
+        else:
+            msg = f"📊 {self.msgs.TOP10}\n\n"
+            for i, (display, count, _) in enumerate(all_users[:10], 1):
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+                msg += f"{medal} {display} - {count} {self.msgs.MESSAGE}\n"
         
-        msg = f"📊 {self.msgs.TOP10}\n\n"
-        for i, (display, count, _) in enumerate(all_users[:10], 1):
-            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
-            msg += f"{medal} {display} - {count} {self.msgs.MESSAGE}\n"
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await update.message.reply_text(msg)
+        await query.edit_message_text(msg, reply_markup=reply_markup)
     
-    async def weekly(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def weekly_callback(self, query, context):
         all_users = self.db.get_all_users_message_counts(168)
         
         msg = f"📊 {self.msgs.WEEKLY_RANKING}\n\n"
@@ -211,9 +207,12 @@ class BadiniBot:
         else:
             msg += self.msgs.NO_MESSAGES
         
-        await update.message.reply_text(msg)
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(msg, reply_markup=reply_markup)
     
-    async def monthly(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def monthly_callback(self, query, context):
         all_users = self.db.get_all_users_message_counts(720)
         
         msg = f"📊 {self.msgs.MONTHLY_RANKING}\n\n"
@@ -223,84 +222,24 @@ class BadiniBot:
         else:
             msg += self.msgs.NO_MESSAGES
         
-        await update.message.reply_text(msg)
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(msg, reply_markup=reply_markup)
     
-    async def active_hours(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def active_hours_callback(self, query, context):
         top_hours = self.db.get_most_active_hours()
         
         msg = f"⏰ {self.msgs.ACTIVE_HOURS}\n\n"
         for hour, count in top_hours:
             msg += f"🕐 {hour} - {count} {self.msgs.MESSAGE}\n"
         
-        await update.message.reply_text(msg)
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(msg, reply_markup=reply_markup)
     
-    async def level(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_id = update.effective_user.id
-        username = update.effective_user.username or update.effective_user.first_name
-        
-        user_data = self.level_system.get_user_data(user_id)
-        
-        if user_data:
-            msg = f"📊 {self.msgs.MY_LEVEL}\n\n"
-            msg += f"👤 @{username}\n"
-            msg += f"📊 {self.msgs.LEVEL}: {user_data['level']}\n"
-            msg += f"⚡️ XP: {user_data['xp']}\n"
-            msg += f"💬 {self.msgs.MESSAGE}: {user_data['total_messages']}\n"
-            
-            next_level_xp = self.level_system.get_xp_for_level(user_data['level'] + 1)
-            remaining = next_level_xp - user_data['xp']
-            if remaining > 0:
-                msg += f"📈 لیفلی دویە: {remaining} XP یێ مایە"
-        else:
-            msg = f"📊 {self.msgs.LEVEL} Sistemi\n\n"
-            msg += f"• هر نامە = 10 XP\n"
-            msg += f"• لیفل 1-15: هر 200 XP = 1 لیفل\n"
-            msg += f"• لیفل 15-30: هر 300 XP = 1 لیفل\n"
-            msg += f"• لیفل 30+: هر 500 XP = 1 لیفل\n\n"
-            msg += f"👤 @{username} هێشتا دەست پێ نەکرایە!"
-        
-        await update.message.reply_text(msg)
-    
-    async def level_ranking(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        top_users = self.level_system.get_top_users(10)
-        
-        if not top_users:
-            await update.message.reply_text("🏆 هێشتا داتا نینە!")
-            return
-        
-        msg = f"🏆 لیفلا پیلترین (Top 10 Level)\n\n"
-        
-        for i, (display_name, level, xp, messages) in enumerate(top_users, 1):
-            if i == 1:
-                medal = "🥇"
-            elif i == 2:
-                medal = "🥈"
-            elif i == 3:
-                medal = "🥉"
-            else:
-                medal = f"{i}."
-            
-            msg += f"{medal} {display_name} - لیفل {level} (XP: {xp})\n"
-        
-        await update.message.reply_text(msg)
-    
-    async def weekly_champ(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        all_users = self.db.get_all_users_message_counts(168)
-        
-        if not all_users:
-            await update.message.reply_text("🏆 هێشتا داتا نینە!")
-            return
-        
-        champ = all_users[0]
-        
-        msg = f"👑 {self.msgs.WEEKLY_CHAMP}\n\n"
-        msg += f"🏆 {champ[0]}\n"
-        msg += f"📊 {champ[1]} {self.msgs.MESSAGE}\n\n"
-        msg += f"🎉 {self.msgs.CONGRAT_CHAMP}"
-        
-        await update.message.reply_text(msg)
-    
-    async def quality(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def quality_callback(self, query, context):
         all_users = self.db.get_all_users_message_counts(24)
         inactive = self.db.get_inactive_users_24h()
         
@@ -325,20 +264,145 @@ class BadiniBot:
         msg += f"⭐️ {self.msgs.SCORE}: {score}/100\n"
         msg += f"📌 {quality}"
         
-        await update.message.reply_text(msg)
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(msg, reply_markup=reply_markup)
     
-    async def pasif(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def weekly_champ_callback(self, query, context):
+        all_users = self.db.get_all_users_message_counts(168)
+        
+        if not all_users:
+            msg = "🏆 هێشتا داتا نینە!"
+        else:
+            champ = all_users[0]
+            msg = f"👑 {self.msgs.WEEKLY_CHAMP}\n\n"
+            msg += f"🏆 {champ[0]}\n"
+            msg += f"📊 {champ[1]} {self.msgs.MESSAGE}\n\n"
+            msg += f"🎉 {self.msgs.CONGRAT_CHAMP}"
+        
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(msg, reply_markup=reply_markup)
+    
+    async def level_callback(self, query, context):
+        user_id = query.from_user.id
+        username = query.from_user.username or query.from_user.first_name
+        
+        user_data = self.level_system.get_user_data(user_id)
+        
+        if user_data:
+            msg = f"📊 {self.msgs.MY_LEVEL}\n\n"
+            msg += f"👤 @{username}\n"
+            msg += f"📊 {self.msgs.LEVEL}: {user_data['level']}\n"
+            msg += f"⚡️ XP: {user_data['xp']}\n"
+            msg += f"💬 {self.msgs.MESSAGE}: {user_data['total_messages']}\n"
+            
+            next_level_xp = self.level_system.get_xp_for_level(user_data['level'] + 1)
+            remaining = next_level_xp - user_data['xp']
+            if remaining > 0:
+                msg += f"📈 لیفلی دویە: {remaining} XP یێ مایە"
+        else:
+            msg = f"📊 {self.msgs.MY_LEVEL}\n\n"
+            msg += f"👤 @{username}\n"
+            msg += "هێشتا داتا نینە!"
+        
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(msg, reply_markup=reply_markup)
+    
+    async def level_ranking_callback(self, query, context):
+        top_users = self.level_system.get_top_users(10)
+        
+        if not top_users:
+            msg = "🏆 هێشتا داتا نینە!"
+        else:
+            msg = f"🏆 لیفلا پیلترین (Top 10 Level)\n\n"
+            for i, (display_name, level, xp, messages) in enumerate(top_users, 1):
+                if i == 1:
+                    medal = "🥇"
+                elif i == 2:
+                    medal = "🥈"
+                elif i == 3:
+                    medal = "🥉"
+                else:
+                    medal = f"{i}."
+                msg += f"{medal} {display_name} - لیفل {level} (XP: {xp})\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(msg, reply_markup=reply_markup)
+    
+    async def pasif_callback(self, query, context):
         inactive = self.db.get_inactive_users_24h()
         
         if not inactive:
-            await update.message.reply_text(f"✅ تو هەمی ئەندامان د 24 سعەتێ دا نامە رێکرە!")
+            msg = f"✅ تو هەمی ئەندامان د 24 سعەتێ دا نامە رێکرە!"
+        else:
+            msg = f"{self.msgs.PASSIVE_LIST}\n\n"
+            for username in inactive[:20]:
+                msg += f"• {username}\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 مێنو", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(msg, reply_markup=reply_markup)
+    
+    async def back_to_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Menüye geri dön"""
+        query = update.callback_query
+        await query.answer()
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("📋 rapor", callback_data="rapor"),
+                InlineKeyboardButton("🔄 reload", callback_data="reload")
+            ],
+            [
+                InlineKeyboardButton("📊 top10", callback_data="top10"),
+                InlineKeyboardButton("📈 week", callback_data="week")
+            ],
+            [
+                InlineKeyboardButton("📅 mont", callback_data="mont"),
+                InlineKeyboardButton("⏰ saat", callback_data="saat")
+            ],
+            [
+                InlineKeyboardButton("⭐️ kalite", callback_data="kalite"),
+                InlineKeyboardButton("👑 top7", callback_data="top7")
+            ],
+            [
+                InlineKeyboardButton("👤 me", callback_data="me"),
+                InlineKeyboardButton("🏆 level", callback_data="level")
+            ],
+            [
+                InlineKeyboardButton("💤 24h", callback_data="24h")
+            ]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            "📋 **مێنو**\n\nکلیکە ل سەر یەکێک ژ دوکمەکان:",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    
+    # ========== DİĞER KOMUTLAR ==========
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await self.check_group(update):
             return
         
-        msg = f"{self.msgs.PASSIVE_LIST}\n\n"
-        for username in inactive[:20]:
-            msg += f"• {username}\n"
-        
-        await update.message.reply_text(msg)
+        now = datetime.now(IRAQ_TZ)
+        await update.message.reply_text(
+            f"👋 {self.msgs.WELCOME}\n\n"
+            f"{self.msgs.BOT_NAME}\n\n"
+            f"📊 داتایێن 24 سعەت و حەڤتیێ\n"
+            f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
+            f"📋 /top - مێنوی سەرەکی\n"
+            f"⏰ کاتی عێراق: {now.strftime('%H:%M')}"
+        )
     
     # ========== HATIRLATMA GÖREVİ ==========
     async def reminder_job(self, context):
@@ -435,10 +499,6 @@ class BadiniBot:
         if update.effective_chat.id != GROUP_ID:
             return
         
-        # Önce menü seçimi mi kontrol et
-        if await self.handle_menu_selection(update, context):
-            return  # Menü seçimi işlendi, normal mesaj işleme geçme
-        
         user = update.effective_user
         if not user:
             return
@@ -473,9 +533,13 @@ class BadiniBot:
     def run(self):
         app = Application.builder().token(TOKEN).build()
         
-        # SADECE 2 KOMUT: /top ve /start
+        # Komutlar
         app.add_handler(CommandHandler("top", self.top))
         app.add_handler(CommandHandler("start", self.start))
+        
+        # Buton handler
+        app.add_handler(CallbackQueryHandler(self.button_handler, pattern="^(rapor|reload|top10|week|mont|saat|kalite|top7|me|level|24h)$"))
+        app.add_handler(CallbackQueryHandler(self.back_to_menu, pattern="^back_to_menu$"))
         
         # Mesaj handler
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
@@ -490,31 +554,26 @@ class BadiniBot:
         job_queue = app.job_queue
         
         if job_queue:
-            # Her gün admin güncelleme (03:00)
             job_queue.run_daily(
                 self.update_admins,
                 time=datetime.time(hour=3, minute=0, tzinfo=IRAQ_TZ)
             )
             
-            # Her gün hatırlatma (10:00)
             job_queue.run_daily(
                 self.reminder_job,
                 time=datetime.time(hour=10, minute=0, tzinfo=IRAQ_TZ)
             )
             
-            # Her gün ceza kontrolü (00:30)
             job_queue.run_daily(
                 self.check_penalties_job,
                 time=datetime.time(hour=0, minute=30, tzinfo=IRAQ_TZ)
             )
             
-            # Her gün rapor (00:00)
             job_queue.run_daily(
                 self.send_daily_report,
                 time=datetime.time(hour=0, minute=0, tzinfo=IRAQ_TZ)
             )
             
-            # Her Pazar haftalık rapor (00:00)
             job_queue.run_daily(
                 self.send_weekly_report,
                 time=datetime.time(hour=0, minute=0, tzinfo=IRAQ_TZ),
@@ -522,7 +581,7 @@ class BadiniBot:
             )
         
         print(f"🚀 {self.msgs.BOT_NAME} başladı...")
-        print(f"📋 Komutlar: /top (ana menü), /start")
+        print(f"📋 Butonlu menü aktif: /top")
         app.run_polling()
 
 
