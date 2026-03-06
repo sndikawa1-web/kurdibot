@@ -1,7 +1,9 @@
 # ==================== ANA BOT ====================
 import os
+import sys
 import logging
 import asyncio
+import json
 from datetime import datetime, time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -12,8 +14,15 @@ from database import Database
 from levels import LevelSystem
 from utils import format_time, split_message
 
-# Loglama
-logging.basicConfig(level=logging.INFO)
+# Loglama - DEBUG SEVİYESİNE AYARLANDI
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 class BadiniBot:
     def __init__(self):
@@ -21,6 +30,7 @@ class BadiniBot:
         self.msgs = Messages()
         self.level_system = LevelSystem(self.db)
         self.first_run = True
+        logger.info("✅ Bot başlatılıyor...")
     
     async def check_group(self, update: Update):
         if update.effective_chat.type == 'private':
@@ -46,10 +56,10 @@ class BadiniBot:
                 }
             
             self.db.save_admins(admin_dict)
-            logging.info(f"✅ {len(admin_dict)} admin güncellendi")
+            logger.info(f"✅ {len(admin_dict)} admin güncellendi")
             
         except Exception as e:
-            logging.error(f"Admin güncelleme hatası: {e}")
+            logger.error(f"Admin güncelleme hatası: {e}")
     
     # ========== BUTONLU MENÜ ==========
     async def top(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -99,6 +109,8 @@ class BadiniBot:
         
         user_id = query.from_user.id
         command = query.data
+        
+        logger.debug(f"Butona tıklandı: user={user_id}, command={command}")
         
         # Butona göre işlem yap
         if command == "rapor":
@@ -401,8 +413,44 @@ class BadiniBot:
             f"📊 داتایێن 24 سعەت و حەڤتیێ\n"
             f"⚠️ سیستمێ جزایێن بێدەنگیان\n\n"
             f"📋 /top - مێنوی سەرەکی\n"
+            f"🔧 /debug - تاقیکرن\n"
             f"⏰ کاتی عێراق: {now.strftime('%H:%M')}"
         )
+    
+    async def debug(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """🔧 /debug - Sistem bilgileri"""
+        if not await self.check_group(update):
+            return
+        
+        user_id = update.effective_user.id
+        username = update.effective_user.username or update.effective_user.first_name
+        
+        # Toplam mesaj sayısı
+        total = self.db.get_total_message_count(user_id)
+        xp = total * 10
+        level = self.level_system.calculate_level(xp)
+        
+        # levels.json kontrolü
+        import os
+        levels_exist = os.path.exists('levels.json')
+        
+        msg = f"🔧 **DEBUG BİLGİLERİ**\n\n"
+        msg += f"👤 @{username}\n"
+        msg += f"📊 Toplam mesaj: {total}\n"
+        msg += f"⚡️ XP: {xp}\n"
+        msg += f"📈 Hesaplanan Level: {level}\n"
+        msg += f"📁 levels.json: {'✅ VAR' if levels_exist else '❌ YOK'}\n"
+        
+        if levels_exist:
+            try:
+                with open('levels.json', 'r') as f:
+                    data = json.load(f)
+                    user_data = data.get(str(user_id), 'KAYIT YOK')
+                msg += f"👤 Kayıtlı level: {user_data}"
+            except:
+                msg += f"❌ Okuma hatası"
+        
+        await update.message.reply_text(msg)
     
     # ========== HATIRLATMA GÖREVİ ==========
     async def reminder_job(self, context):
@@ -503,19 +551,29 @@ class BadiniBot:
         if not user:
             return
         
-        # Normal mesaj işleme
+        logger.debug(f"🔍 1. Kullanıcı kaydediliyor: {user.id}")
         self.db.save_user(user.id, user.username, user.first_name)
+        
+        logger.debug(f"🔍 2. Mesaj ekleniyor: {user.id}")
         self.db.add_message(user.id)
+        
+        logger.debug(f"🔍 3. Ceza sıfırlanıyor: {user.id}")
         self.db.reset_penalty(user.id)
         
+        logger.debug(f"🔍 4. Toplam mesaj sayısı alınıyor: {user.id}")
         total = self.db.get_total_message_count(user.id)
+        logger.debug(f"🔍 4a. Toplam mesaj: {total}")
+        
+        logger.debug(f"🔍 5. Seviye güncelleniyor: {user.id}")
         leveled_up, new_level = self.level_system.update_user(
             user.id, 
             user.username or user.first_name, 
             total
         )
+        logger.debug(f"🔍 5a. leveled_up={leveled_up}, new_level={new_level}")
         
         if leveled_up:
+            logger.debug(f"🔍 6. Level atlama bildirimi gönderiliyor: {new_level}")
             emoji_id = self.level_system.get_level_emoji_id(new_level)
             display_name = f"@{user.username}" if user.username else user.first_name
             
@@ -529,6 +587,9 @@ class BadiniBot:
                 ),
                 parse_mode='HTML'
             )
+            logger.debug(f"🔍 6a. Bildirim gönderildi")
+        
+        logger.debug(f"✅ İşlem tamam: {user.id}")
     
     def run(self):
         app = Application.builder().token(TOKEN).build()
@@ -536,6 +597,7 @@ class BadiniBot:
         # Komutlar
         app.add_handler(CommandHandler("top", self.top))
         app.add_handler(CommandHandler("start", self.start))
+        app.add_handler(CommandHandler("debug", self.debug))
         
         # Buton handler
         app.add_handler(CallbackQueryHandler(self.button_handler, pattern="^(rapor|reload|top10|week|mont|saat|kalite|top7|me|level|24h)$"))
@@ -580,15 +642,15 @@ class BadiniBot:
                 days=(6,)
             )
         
-        print(f"🚀 {self.msgs.BOT_NAME} başladı...")
-        print(f"📋 Butonlu menü aktif: /top")
+        logger.info(f"🚀 {self.msgs.BOT_NAME} başladı...")
+        logger.info(f"📋 Butonlu menü aktif: /top")
         app.run_polling()
 
 
 # ==================== BAŞLAT ====================
 if __name__ == "__main__":
     if not TOKEN:
-        print("❌ HATA: BOT_TOKEN bulunamadı!")
+        logger.error("❌ HATA: BOT_TOKEN bulunamadı!")
         exit(1)
     
     bot = BadiniBot()
