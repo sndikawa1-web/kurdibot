@@ -1,13 +1,17 @@
 # ==================== SEVİYE SİSTEMİ ====================
 import json
 import os
+import logging
 from datetime import datetime
 from config import IRAQ_TZ
+
+logger = logging.getLogger(__name__)
 
 class LevelSystem:
     def __init__(self, db):
         self.db = db
         self.levels_file = 'levels.json'
+        logger.debug(f"LevelSystem başlatıldı, dosya: {self.levels_file}")
     
     def calculate_level(self, xp):
         """XP'ye göre level hesapla (15'den sonra zorlaşır)"""
@@ -54,19 +58,28 @@ class LevelSystem:
         """Kullanıcının seviyesini güncelle - VERİLERİ KORUR"""
         user_id_str = str(user_id)
         
+        logger.debug(f"📊 update_user başladı: user={user_id}, total={total_messages}")
+        
         # Dosyayı oku (yoksa boş dict oluşur)
         try:
             with open(self.levels_file, 'r', encoding='utf-8') as f:
                 levels = json.load(f)
-        except:
+            logger.debug(f"📁 levels.json okundu, {len(levels)} kayıt var")
+        except FileNotFoundError:
+            logger.debug(f"📁 levels.json bulunamadı, yeni oluşturulacak")
+            levels = {}
+        except Exception as e:
+            logger.error(f"❌ levels.json okuma hatası: {e}")
             levels = {}
         
         # XP hesapla
         xp = total_messages * 10
         new_level = self.calculate_level(xp)
+        logger.debug(f"📊 XP={xp}, new_level={new_level}")
         
         # İlk kez kayıt
         if user_id_str not in levels:
+            logger.debug(f"🆕 Yeni kullanıcı kaydı: {user_id}")
             levels[user_id_str] = {
                 'user_id': user_id,
                 'username': username,
@@ -76,17 +89,25 @@ class LevelSystem:
                 'last_update': datetime.now(IRAQ_TZ).isoformat()
             }
             
-            with open(self.levels_file, 'w', encoding='utf-8') as f:
-                json.dump(levels, f, ensure_ascii=False, indent=2)
+            try:
+                with open(self.levels_file, 'w', encoding='utf-8') as f:
+                    json.dump(levels, f, ensure_ascii=False, indent=2)
+                logger.debug(f"✅ Yeni kullanıcı kaydedildi")
+            except Exception as e:
+                logger.error(f"❌ Kayıt hatası: {e}")
             
-            return new_level > 1, new_level  # İlk kayıtta level 1'den büyükse bildirim
+            result = new_level > 1, new_level
+            logger.debug(f"📤 Dönüş: {result}")
+            return result
         
         # Var olan kayıt
         old_level = levels[user_id_str]['level']
         old_xp = levels[user_id_str]['xp']
+        logger.debug(f"📊 Eski: level={old_level}, xp={old_xp}")
         
         # Sadece değişiklik varsa güncelle
         if old_xp != xp or old_level != new_level:
+            logger.debug(f"🔄 Güncelleme yapılıyor")
             levels[user_id_str].update({
                 'xp': xp,
                 'level': new_level,
@@ -94,11 +115,18 @@ class LevelSystem:
                 'last_update': datetime.now(IRAQ_TZ).isoformat()
             })
             
-            with open(self.levels_file, 'w', encoding='utf-8') as f:
-                json.dump(levels, f, ensure_ascii=False, indent=2)
+            try:
+                with open(self.levels_file, 'w', encoding='utf-8') as f:
+                    json.dump(levels, f, ensure_ascii=False, indent=2)
+                logger.debug(f"✅ Güncelleme kaydedildi")
+            except Exception as e:
+                logger.error(f"❌ Güncelleme hatası: {e}")
             
-            return new_level > old_level, new_level
+            result = new_level > old_level, new_level
+            logger.debug(f"📤 Dönüş: {result}")
+            return result
         
+        logger.debug(f"📤 Değişiklik yok")
         return False, new_level
     
     def get_user_rank(self, user_id):
