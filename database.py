@@ -78,21 +78,6 @@ class Database:
         with open(self.hourly_file, 'w', encoding='utf-8') as f:
             json.dump(hourly, f, ensure_ascii=False, indent=2)
     
-    def get_user_message_count(self, user_id, hours=24):
-        user_id_str = str(user_id)
-        with open(self.messages_file, 'r', encoding='utf-8') as f:
-            messages = json.load(f)
-        
-        since_date = (datetime.now(IRAQ_TZ) - timedelta(hours=hours)).date()
-        total = 0
-        
-        for date_str, daily_msgs in messages.items():
-            msg_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-            if msg_date >= since_date:
-                total += daily_msgs.get(user_id_str, 0)
-        
-        return total
-    
     def get_total_message_count(self, user_id):
         user_id_str = str(user_id)
         with open(self.messages_file, 'r', encoding='utf-8') as f:
@@ -141,6 +126,57 @@ class Database:
         admins = self.get_admins()
         return str(user_id) in admins
     
+    # ========== PASİF KULLANICILAR ==========
+    def get_inactive_users_24h(self):
+        users = self.get_all_users()
+        admins = self.get_admins()
+        one_day_ago = datetime.now(IRAQ_TZ) - timedelta(days=1)
+        inactive = []
+        
+        for user_id, user_data in users.items():
+            if user_id in admins:
+                continue
+            last_seen = datetime.fromisoformat(user_data.get('last_seen', '2000-01-01'))
+            if last_seen < one_day_ago:
+                username = user_data.get('username')
+                display = f"@{username}" if username else user_data.get('first_name', '?')
+                inactive.append(display)
+        
+        return inactive
+    
+    # ========== HATIRLATMA SİSTEMİ (YENİ) ==========
+    def get_users_for_reminder(self):
+        """Hatırlatma için kullanıcıları getir (24 saat ve 3 gün)"""
+        users = self.get_all_users()
+        admins = self.get_admins()
+        now = datetime.now(IRAQ_TZ)
+        one_day_ago = now - timedelta(days=1)
+        three_days_ago = now - timedelta(days=3)
+        
+        reminder_24h = []
+        reminder_3d = []
+        
+        for user_id, user_data in users.items():
+            if user_id in admins:
+                continue
+                
+            last_seen = datetime.fromisoformat(user_data.get('last_seen', '2000-01-01'))
+            username = user_data.get('username')
+            first_name = user_data.get('first_name', '?')
+            
+            display = f"@{username}" if username else first_name
+            user_id_int = user_data.get('user_id')
+            
+            # 24 saat - 3 gün arası
+            if last_seen < one_day_ago and last_seen >= three_days_ago:
+                reminder_24h.append((user_id_int, display))
+            
+            # 3 günden fazla
+            elif last_seen < three_days_ago:
+                reminder_3d.append((user_id_int, display))
+        
+        return reminder_24h, reminder_3d
+    
     # ========== CEZA İŞLEMLERİ ==========
     def update_penalties(self):
         with open(self.penalties_file, 'r', encoding='utf-8') as f:
@@ -183,23 +219,6 @@ class Database:
                 result.append((int(user_id), display))
         
         return result
-    
-    def get_inactive_users_24h(self):
-        users = self.get_all_users()
-        admins = self.get_admins()
-        one_day_ago = datetime.now(IRAQ_TZ) - timedelta(days=1)
-        inactive = []
-        
-        for user_id, user_data in users.items():
-            if user_id in admins:
-                continue
-            last_seen = datetime.fromisoformat(user_data.get('last_seen', '2000-01-01'))
-            if last_seen < one_day_ago:
-                username = user_data.get('username')
-                display = f"@{username}" if username else user_data.get('first_name', '?')
-                inactive.append(display)
-        
-        return inactive
     
     def reset_penalty(self, user_id):
         user_id_str = str(user_id)
