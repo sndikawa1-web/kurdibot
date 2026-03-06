@@ -61,16 +61,26 @@ class LevelSystem:
         xp = total_messages * 10
         new_level = self.calculate_level(xp)
         
+        # İlk kez kayıt oluyorsa
         if user_id_str not in levels:
             levels[user_id_str] = {
                 'user_id': user_id,
                 'username': username,
-                'level': 1,
-                'xp': 0,
-                'total_messages': 0,
-                'last_update': None
+                'level': new_level,
+                'xp': xp,
+                'total_messages': total_messages,
+                'last_update': datetime.now(IRAQ_TZ).isoformat()
             }
+            
+            with open(self.levels_file, 'w', encoding='utf-8') as f:
+                json.dump(levels, f, ensure_ascii=False, indent=2)
+            
+            # İlk kayıt ve level 1'den büyükse bildirim gönder
+            if new_level > 1:
+                return True, new_level
+            return False, new_level
         
+        # Daha önce kayıt varsa
         old_level = levels[user_id_str]['level']
         old_xp = levels[user_id_str]['xp']
         
