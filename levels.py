@@ -51,17 +51,21 @@ class LevelSystem:
             return Messages.LEVEL_EMOJI_IDS['51+']
     
     def update_user(self, user_id, username, total_messages):
-        """Kullanıcının seviyesini güncelle"""
+        """Kullanıcının seviyesini güncelle - VERİLERİ KORUR"""
         user_id_str = str(user_id)
         
-        with open(self.levels_file, 'r', encoding='utf-8') as f:
-            levels = json.load(f)
+        # Dosyayı oku (yoksa boş dict oluşur)
+        try:
+            with open(self.levels_file, 'r', encoding='utf-8') as f:
+                levels = json.load(f)
+        except:
+            levels = {}
         
-        # XP hesapla (her mesaj 10 XP)
+        # XP hesapla
         xp = total_messages * 10
         new_level = self.calculate_level(xp)
         
-        # İlk kez kayıt oluyorsa
+        # İlk kez kayıt
         if user_id_str not in levels:
             levels[user_id_str] = {
                 'user_id': user_id,
@@ -75,16 +79,13 @@ class LevelSystem:
             with open(self.levels_file, 'w', encoding='utf-8') as f:
                 json.dump(levels, f, ensure_ascii=False, indent=2)
             
-            # İlk kayıt ve level 1'den büyükse bildirim gönder
-            if new_level > 1:
-                return True, new_level
-            return False, new_level
+            return new_level > 1, new_level  # İlk kayıtta level 1'den büyükse bildirim
         
-        # Daha önce kayıt varsa
+        # Var olan kayıt
         old_level = levels[user_id_str]['level']
         old_xp = levels[user_id_str]['xp']
         
-        # Değişiklik varsa güncelle
+        # Sadece değişiklik varsa güncelle
         if old_xp != xp or old_level != new_level:
             levels[user_id_str].update({
                 'xp': xp,
@@ -96,9 +97,7 @@ class LevelSystem:
             with open(self.levels_file, 'w', encoding='utf-8') as f:
                 json.dump(levels, f, ensure_ascii=False, indent=2)
             
-            # Level atladıysa True döndür
-            if new_level > old_level:
-                return True, new_level
+            return new_level > old_level, new_level
         
         return False, new_level
     
@@ -106,8 +105,11 @@ class LevelSystem:
         """Kullanıcının sıralamasını bul"""
         user_id_str = str(user_id)
         
-        with open(self.levels_file, 'r', encoding='utf-8') as f:
-            levels = json.load(f)
+        try:
+            with open(self.levels_file, 'r', encoding='utf-8') as f:
+                levels = json.load(f)
+        except:
+            return None, 0
         
         # Tüm kullanıcıları XP'ye göre sırala
         sorted_users = sorted(levels.items(), key=lambda x: x[1]['xp'], reverse=True)
@@ -120,15 +122,20 @@ class LevelSystem:
     
     def get_user_data(self, user_id):
         """Kullanıcının seviye verilerini getir"""
-        with open(self.levels_file, 'r', encoding='utf-8') as f:
-            levels = json.load(f)
-        
-        return levels.get(str(user_id))
+        try:
+            with open(self.levels_file, 'r', encoding='utf-8') as f:
+                levels = json.load(f)
+            return levels.get(str(user_id))
+        except:
+            return None
     
     def get_top_users(self, limit=10):
         """En yüksek seviyedeki kullanıcıları getir"""
-        with open(self.levels_file, 'r', encoding='utf-8') as f:
-            levels = json.load(f)
+        try:
+            with open(self.levels_file, 'r', encoding='utf-8') as f:
+                levels = json.load(f)
+        except:
+            return []
         
         # XP'ye göre sırala
         sorted_users = sorted(levels.items(), key=lambda x: x[1]['xp'], reverse=True)[:limit]
