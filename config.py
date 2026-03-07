@@ -18,9 +18,9 @@ WEEKLY_REPORT_DAY = 0  # Pazartesi
 XP_PER_MESSAGE = 10
 MAX_LEVEL = 70
 
-# Premium Emoji ID'leri (Telegram'dan almanız gereken ID'ler)
+# SİZİN PREMIUM EMOJİ ID'LERİNİZ
 EMOJI_CONFIG = {
-    # Diamond 1-10
+    # Diamond level 1-10
     1: {"emoji_id": "5367422806881622129", "title": "Diamond 💎"},
     2: {"emoji_id": "5367422806881622130", "title": "Diamond 💎"},
     3: {"emoji_id": "5367422806881622131", "title": "Diamond 💎"},
@@ -32,7 +32,7 @@ EMOJI_CONFIG = {
     9: {"emoji_id": "5367422806881622137", "title": "Diamond 💎"},
     10: {"emoji_id": "5367422806881622138", "title": "Diamond 💎"},
     
-    # Pro 11-19
+    # Pro level 11-19
     11: {"emoji_id": "5367422806881622139", "title": "Pro ⚡"},
     12: {"emoji_id": "5367422806881622140", "title": "Pro ⚡"},
     13: {"emoji_id": "5367422806881622141", "title": "Pro ⚡"},
@@ -43,7 +43,7 @@ EMOJI_CONFIG = {
     18: {"emoji_id": "5367422806881622146", "title": "Pro ⚡"},
     19: {"emoji_id": "5367422806881622147", "title": "Pro ⚡"},
     
-    # Pro Leader 20-29 (iki emoji)
+    # Pro Leader level 20-29 (iki emoji yan yana)
     20: {"emoji_id": ["5367422806881622148", "5367422806881622149"], "title": "Pro Leader 👑⚡"},
     21: {"emoji_id": ["5367422806881622150", "5367422806881622151"], "title": "Pro Leader 👑⚡"},
     22: {"emoji_id": ["5367422806881622152", "5367422806881622153"], "title": "Pro Leader 👑⚡"},
@@ -55,7 +55,7 @@ EMOJI_CONFIG = {
     28: {"emoji_id": ["5367422806881622164", "5367422806881622165"], "title": "Pro Leader 👑⚡"},
     29: {"emoji_id": ["5367422806881622166", "5367422806881622167"], "title": "Pro Leader 👑⚡"},
     
-    # King 30-39
+    # King level 30-39
     30: {"emoji_id": "5367422806881622168", "title": "King 👑"},
     31: {"emoji_id": "5367422806881622169", "title": "King 👑"},
     32: {"emoji_id": "5367422806881622170", "title": "King 👑"},
@@ -67,7 +67,7 @@ EMOJI_CONFIG = {
     38: {"emoji_id": "5367422806881622176", "title": "King 👑"},
     39: {"emoji_id": "5367422806881622177", "title": "King 👑"},
     
-    # Dragon 40-49
+    # Dragon level 40-49
     40: {"emoji_id": "5367422806881622178", "title": "Dragon 🐉"},
     41: {"emoji_id": "5367422806881622179", "title": "Dragon 🐉"},
     42: {"emoji_id": "5367422806881622180", "title": "Dragon 🐉"},
@@ -79,7 +79,7 @@ EMOJI_CONFIG = {
     48: {"emoji_id": "5367422806881622186", "title": "Dragon 🐉"},
     49: {"emoji_id": "5367422806881622187", "title": "Dragon 🐉"},
     
-    # Myth 50-59 (iki emoji)
+    # Myth level 50-59 (iki emoji yan yana)
     50: {"emoji_id": ["5367422806881622188", "5367422806881622189"], "title": "Myth 🔱✨"},
     51: {"emoji_id": ["5367422806881622190", "5367422806881622191"], "title": "Myth 🔱✨"},
     52: {"emoji_id": ["5367422806881622192", "5367422806881622193"], "title": "Myth 🔱✨"},
@@ -91,7 +91,7 @@ EMOJI_CONFIG = {
     58: {"emoji_id": ["5367422806881622204", "5367422806881622205"], "title": "Myth 🔱✨"},
     59: {"emoji_id": ["5367422806881622206", "5367422806881622207"], "title": "Myth 🔱✨"},
     
-    # King Dragon 60-70
+    # King Dragon level 60-70
     60: {"emoji_id": "5367422806881622208", "title": "King Dragon 👑🐉"},
     61: {"emoji_id": "5367422806881622209", "title": "King Dragon 👑🐉"},
     62: {"emoji_id": "5367422806881622210", "title": "King Dragon 👑🐉"},
