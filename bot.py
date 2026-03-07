@@ -31,8 +31,9 @@ def update_admin_cache(chat_id):
         
         for admin_id in admin_cache:
             db.update_admin_status(admin_id, True)
+        print(f"✅ Admin cache güncellendi: {len(admin_cache)} admin")
     except Exception as e:
-        print(f"Admin cache güncelleme hatası: {e}")
+        print(f"❌ Admin cache güncelleme hatası: {e}")
 
 def is_allowed_group(message):
     chat_id = message.chat.id
@@ -48,128 +49,173 @@ def is_user_admin(message):
     return user_id in admin_cache
 
 # === MESAJ İŞLEYİCİ ===
-@bot.message_handler(func=lambda message: True, content_types=['text', 'photo', 'video', 'document', 'sticker', 'voice'])
+@bot.message_handler(func=lambda message: True, content_types=['text', 'photo', 'video', 'document', 'sticker', 'voice', 'animation'])
 def handle_all_messages(message):
-    # Özel mesajları engelle
-    if message.chat.type == 'private':
-        bot.reply_to(message, translations.error_message("wrong_group"))
-        return
-    
-    if not is_allowed_group(message):
-        return
-    
-    chat_id = message.chat.id
-    user = message.from_user
-    
-    db.add_user(user.id, user.username, user.first_name, user.last_name)
-    
-    leveled_up, new_level, title = db.update_user_activity(user.id)
-    
-    if leveled_up:
-        user_name = get_user_display_name(user)
-        level_msg = translations.level_up_message(user.username or user.first_name, new_level, title)
+    try:
+        # Özel mesajları engelle
+        if message.chat.type == 'private':
+            bot.reply_to(message, translations.error_message("wrong_group"))
+            return
         
-        bot.send_message(chat_id, level_msg, parse_mode='Markdown')
+        if not is_allowed_group(message):
+            return
+        
+        chat_id = message.chat.id
+        user = message.from_user
+        
+        # GÜVENLİ KULLANICI BİLGİLERİ - None kontrolü
+        user_id = user.id
+        username = user.username if user.username else None
+        first_name = user.first_name if user.first_name else "Kullanıcı"
+        last_name = user.last_name if user.last_name else ""
+        
+        # Kullanıcıyı veritabanına ekle
+        db.add_user(user_id, username, first_name, last_name)
+        
+        # Sadece text mesajları için XP ver (sticker, fotoğraf vs için verme)
+        if message.content_type == 'text':
+            leveled_up, new_level, title = db.update_user_activity(user_id)
+            
+            if leveled_up:
+                # Güvenli isim gösterimi
+                display_name = f"@{username}" if username else first_name
+                level_msg = translations.level_up_message(display_name, new_level, title)
+                
+                bot.send_message(chat_id, level_msg, parse_mode='Markdown')
+                print(f"🎉 Level atlama: {display_name} -> Level {new_level}")
+    
+    except Exception as e:
+        print(f"❌ HATA (handle_all_messages): {str(e)}")
+        # Hatayı logla ama bot patlamasın
+        pass
 
 # === KOMUTLAR ===
 @bot.message_handler(commands=['start'])
 def cmd_start(message):
-    if message.chat.type == 'private':
-        bot.reply_to(message, translations.error_message("wrong_group"))
-        return
-    
-    if not is_allowed_group(message):
-        return
-    
-    bot.reply_to(message, translations.bot_start_message(), parse_mode='Markdown')
+    try:
+        if message.chat.type == 'private':
+            bot.reply_to(message, translations.error_message("wrong_group"))
+            return
+        
+        if not is_allowed_group(message):
+            return
+        
+        bot.reply_to(message, translations.bot_start_message(), parse_mode='Markdown')
+        print(f"✅ /start komutu çalıştı: {message.from_user.id}")
+    except Exception as e:
+        print(f"❌ /start hatası: {e}")
 
 @bot.message_handler(commands=['help'])
 def cmd_help(message):
-    if message.chat.type == 'private':
-        bot.reply_to(message, translations.error_message("wrong_group"))
-        return
-    
-    if not is_allowed_group(message):
-        return
-    
-    help_text = "**فرمانێن بوت:**\n\n"
-    for cmd, desc in translations.command_descriptions().items():
-        help_text += f"{desc}\n"
-    
-    bot.reply_to(message, help_text, parse_mode='Markdown')
+    try:
+        if message.chat.type == 'private':
+            bot.reply_to(message, translations.error_message("wrong_group"))
+            return
+        
+        if not is_allowed_group(message):
+            return
+        
+        help_text = "**فرمانێن بوت:**\n\n"
+        for cmd, desc in translations.command_descriptions().items():
+            help_text += f"{desc}\n"
+        
+        bot.reply_to(message, help_text, parse_mode='Markdown')
+    except Exception as e:
+        print(f"❌ /help hatası: {e}")
 
 @bot.message_handler(commands=['level', 'stats'])
 def cmd_level(message):
-    if message.chat.type == 'private':
-        bot.reply_to(message, translations.error_message("wrong_group"))
-        return
-    
-    if not is_allowed_group(message):
-        return
-    
-    user_id = message.from_user.id
-    stats = db.get_user_stats(user_id)
-    
-    if stats:
-        username, first_name, xp, level, msg_count, last_date = stats
-        name = f"@{username}" if username else first_name
-        title = level_system.get_level_title(level)
+    try:
+        if message.chat.type == 'private':
+            bot.reply_to(message, translations.error_message("wrong_group"))
+            return
         
-        next_level_xp = (level * 100)
-        next_xp_needed = next_level_xp - xp
+        if not is_allowed_group(message):
+            return
         
-        stats_msg = translations.user_stats(name, level, title, xp, msg_count, next_xp_needed, last_date)
-        bot.reply_to(message, stats_msg, parse_mode='Markdown')
-    else:
-        bot.reply_to(message, translations.error_message("no_user"))
+        user_id = message.from_user.id
+        stats = db.get_user_stats(user_id)
+        
+        if stats:
+            username, first_name, xp, level, msg_count, last_date = stats
+            name = f"@{username}" if username else (first_name or "Kullanıcı")
+            title = level_system.get_level_title(level)
+            
+            next_level_xp = (level * 100)
+            current_xp = xp
+            xp_needed = next_level_xp - current_xp
+            
+            stats_msg = (
+                f"📊 **داتایێن {name}**\n\n"
+                f"🏆 **Level:** {level} - {title}\n"
+                f"✨ **XP:** {xp}\n"
+                f"💬 **توتالێ ناما:** {msg_count}\n"
+                f"📈 **بۆ لیفلەکێ نڤ:** {xp_needed} پوینت پێدفینە\n"
+            )
+            
+            if last_date:
+                stats_msg += f"⏰ **دوماهیک نامە:** {last_date[:10]}"
+            
+            bot.reply_to(message, stats_msg, parse_mode='Markdown')
+        else:
+            bot.reply_to(message, translations.error_message("no_user"))
+    except Exception as e:
+        print(f"❌ /level hatası: {e}")
+        bot.reply_to(message, translations.error_message("general"))
 
 @bot.message_handler(commands=['top'])
 def cmd_top(message):
-    if message.chat.type == 'private':
-        bot.reply_to(message, translations.error_message("wrong_group"))
-        return
-    
-    if not is_allowed_group(message):
-        return
-    
-    top_users = db.get_top_users(10)
-    top_msg = level_system.format_top_list(top_users)
-    bot.reply_to(message, top_msg, parse_mode='Markdown')
+    try:
+        if message.chat.type == 'private':
+            bot.reply_to(message, translations.error_message("wrong_group"))
+            return
+        
+        if not is_allowed_group(message):
+            return
+        
+        top_users = db.get_top_users(10)
+        top_msg = level_system.format_top_list(top_users)
+        bot.reply_to(message, top_msg, parse_mode='Markdown')
+    except Exception as e:
+        print(f"❌ /top hatası: {e}")
 
 @bot.message_handler(commands=['24h'])
 def cmd_24h(message):
-    if message.chat.type == 'private':
-        bot.reply_to(message, translations.error_message("wrong_group"))
-        return
-    
-    if not is_allowed_group(message):
-        return
-    
-    if not is_user_admin(message):
-        bot.reply_to(message, translations.error_message("not_admin"))
-        return
-    
-    inactive_users = db.get_inactive_users_24h()
-    report = translations.inactive_24h_report(inactive_users, len(inactive_users))
-    bot.reply_to(message, report, parse_mode='Markdown')
+    try:
+        if message.chat.type == 'private':
+            bot.reply_to(message, translations.error_message("wrong_group"))
+            return
+        
+        if not is_allowed_group(message):
+            return
+        
+        if not is_user_admin(message):
+            bot.reply_to(message, translations.error_message("not_admin"))
+            return
+        
+        inactive_users = db.get_inactive_users_24h()
+        report = translations.inactive_24h_report(inactive_users, len(inactive_users))
+        bot.reply_to(message, report, parse_mode='Markdown')
+    except Exception as e:
+        print(f"❌ /24h hatası: {e}")
 
 @bot.message_handler(commands=['nadmin'])
 def cmd_nadmin(message):
-    if message.chat.type == 'private':
-        bot.reply_to(message, translations.error_message("wrong_group"))
-        return
-    
-    if not is_allowed_group(message):
-        return
-    
-    if not is_user_admin(message):
-        bot.reply_to(message, translations.error_message("not_admin"))
-        return
-    
-    chat_id = message.chat.id
-    bot.reply_to(message, "🔄 ڕێڤەبەر تێنە کنترولکرن...", parse_mode='Markdown')
-    
     try:
+        if message.chat.type == 'private':
+            bot.reply_to(message, translations.error_message("wrong_group"))
+            return
+        
+        if not is_allowed_group(message):
+            return
+        
+        if not is_user_admin(message):
+            bot.reply_to(message, translations.error_message("not_admin"))
+            return
+        
+        chat_id = message.chat.id
+        bot.reply_to(message, "🔄 ڕێڤەبەر تێنە کنترولکرن...", parse_mode='Markdown')
+        
         admins = bot.get_chat_administrators(chat_id)
         current_admins = [admin.user.id for admin in admins]
         
@@ -183,8 +229,8 @@ def cmd_nadmin(message):
                     
                     user_info = (admin_id, user.username, user.first_name)
                     new_admins.append(user_info)
-                except:
-                    pass
+                except Exception as e:
+                    print(f"Admin ekleme hatası {admin_id}: {e}")
         
         update_admin_cache(chat_id)
         
@@ -192,32 +238,63 @@ def cmd_nadmin(message):
         bot.send_message(chat_id, result_msg, parse_mode='Markdown')
         
     except Exception as e:
+        print(f"❌ /nadmin hatası: {e}")
         bot.reply_to(message, f"❌ خەلەت: {str(e)}")
+
+# === TEŞHİS KOMUTU ===
+@bot.message_handler(commands=['testid'])
+def cmd_testid(message):
+    try:
+        if message.chat.type == 'private':
+            bot.reply_to(message, "Bu özel sohbet. Grup ID: yok")
+            return
+        
+        bot.reply_to(
+            message, 
+            f"📊 **GRUP BİLGİLERİ**\n\n"
+            f"🆔 Bu grubun ID'si: `{message.chat.id}`\n"
+            f"📌 Grup tipi: {message.chat.type}\n"
+            f"🔑 İzin verilen ID: `{ALLOWED_GROUP_ID}`\n"
+            f"✅ Eşleşiyor mu: {'✅ EVET' if message.chat.id == ALLOWED_GROUP_ID else '❌ HAYIR'}\n"
+            f"👤 Sizin ID: {message.from_user.id}\n"
+            f"👑 Admin misiniz: {'✅ EVET' if is_user_admin(message) else '❌ HAYIR'}",
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        bot.reply_to(message, f"❌ Hata: {e}")
 
 # === GRUP OLAYLARI ===
 @bot.message_handler(content_types=['new_chat_members'])
 def handle_new_member(message):
-    if message.chat.type == 'private':
-        return
-    
-    if not is_allowed_group(message):
-        return
-    
-    for new_member in message.new_chat_members:
-        if new_member.id == bot.get_me().id:
-            bot.reply_to(message, translations.bot_start_message(), parse_mode='Markdown')
-            update_admin_cache(message.chat.id)
+    try:
+        if message.chat.type == 'private':
+            return
+        
+        if not is_allowed_group(message):
+            return
+        
+        for new_member in message.new_chat_members:
+            if new_member.id == bot.get_me().id:
+                bot.reply_to(message, translations.bot_start_message(), parse_mode='Markdown')
+                update_admin_cache(message.chat.id)
+                print("✅ Bot gruba eklendi!")
+    except Exception as e:
+        print(f"❌ new_member hatası: {e}")
 
 # === ANA ÇALIŞTIRMA ===
 if __name__ == "__main__":
     print("🤖 Badînî Bot tê başkirin...")
-    print(f"🔑 Token: {BOT_TOKEN[:10]}...")
+    print(f"🔑 Token: {BOT_TOKEN[:10]}... (gizli)")
     print(f"👥 Gruba destûrdayî: {ALLOWED_GROUP_ID}")
     print(translations.bot_ready())
     
+    # Admin önbelleğini güncelle
     try:
         update_admin_cache(ALLOWED_GROUP_ID)
-    except:
-        print("⚠️ Admin listesi alinamadi.")
+    except Exception as e:
+        print(f"⚠️ Admin listesi alınamadı: {e}")
+        print("Bot gruba eklendiğinde otomatik güncellenecek.")
     
+    # Bot'u başlat
+    print("🚀 Bot polling başlıyor...")
     bot.infinity_polling()
