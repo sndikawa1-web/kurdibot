@@ -1,192 +1,26 @@
-# bot.py - BADÎNÎ BOT ÇALIŞAN KARARLI VERSİYON
+# bot.py
 import telebot
 import os
-import sqlite3
-import datetime
 import time
 from telebot import types
 
-# === KONFİGÜRASYON ===
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
-ALLOWED_GROUP_ID = int(os.environ.get('GROUP_ID', '0'))
-DB_NAME = "badini_bot.db"
-XP_PER_MESSAGE = 10
+from config import BOT_TOKEN, ALLOWED_GROUP_ID
+from database import Database
+from levels import LevelSystem
+from reports import ReportSystem
+from utils import BadiniTranslations, get_user_display_name
 
 # Bot'u başlat
 bot = telebot.TeleBot(BOT_TOKEN)
+db = Database()
+level_system = LevelSystem()
+translations = BadiniTranslations()
+
+# Admin cache
 admin_cache = set()
 
-# === VERİTABANI ===
-class Database:
-    def __init__(self):
-        self.conn = sqlite3.connect(DB_NAME, check_same_thread=False)
-        self.cursor = self.conn.cursor()
-        self.create_tables()
-        print("✅ Veritabanı bağlantısı kuruldu")
-    
-    def create_tables(self):
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                user_id INTEGER PRIMARY KEY,
-                username TEXT,
-                first_name TEXT,
-                last_name TEXT,
-                xp INTEGER DEFAULT 0,
-                level INTEGER DEFAULT 1,
-                messages_count INTEGER DEFAULT 0,
-                last_message_date TEXT,
-                joined_date TEXT
-            )
-        ''')
-        self.conn.commit()
-        print("✅ Tablolar oluşturuldu")
-    
-    def add_user(self, user_id, username, first_name, last_name):
-        try:
-            now = datetime.datetime.now().isoformat()
-            self.cursor.execute('''
-                INSERT OR IGNORE INTO users 
-                (user_id, username, first_name, last_name, joined_date) 
-                VALUES (?, ?, ?, ?, ?)
-            ''', (user_id, username, first_name, last_name, now))
-            self.conn.commit()
-            return True
-        except Exception as e:
-            print(f"❌ add_user hatası: {e}")
-            return False
-    
-    def update_user_activity(self, user_id):
-        try:
-            now = datetime.datetime.now().isoformat()
-            
-            self.cursor.execute('SELECT xp, level, messages_count FROM users WHERE user_id = ?', (user_id,))
-            result = self.cursor.fetchone()
-            
-            if result:
-                xp, level, messages_count = result
-                new_xp = xp + XP_PER_MESSAGE
-                new_messages_count = messages_count + 1
-                new_level = (new_xp // 100) + 1
-                if new_level > 70:
-                    new_level = 70
-                
-                self.cursor.execute('''
-                    UPDATE users 
-                    SET xp = ?, level = ?, messages_count = ?, last_message_date = ?
-                    WHERE user_id = ?
-                ''', (new_xp, new_level, new_messages_count, now, user_id))
-                
-                self.conn.commit()
-                
-                if new_level > level:
-                    return True, new_level
-            return False, None
-        except Exception as e:
-            print(f"❌ update_user_activity hatası: {e}")
-            return False, None
-    
-    def get_user_stats(self, user_id):
-        try:
-            self.cursor.execute('''
-                SELECT username, first_name, xp, level, messages_count, last_message_date 
-                FROM users WHERE user_id = ?
-            ''', (user_id,))
-            return self.cursor.fetchone()
-        except Exception as e:
-            print(f"❌ get_user_stats hatası: {e}")
-            return None
-    
-    def get_top_users(self, limit=10):
-        try:
-            self.cursor.execute('''
-                SELECT user_id, username, first_name, xp, level, messages_count 
-                FROM users 
-                ORDER BY level DESC, xp DESC 
-                LIMIT ?
-            ''', (limit,))
-            return self.cursor.fetchall()
-        except Exception as e:
-            print(f"❌ get_top_users hatası: {e}")
-            return []
-    
-    def get_inactive_users_24h(self):
-        try:
-            yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).isoformat()
-            
-            self.cursor.execute('SELECT user_id, username, first_name FROM users')
-            all_users = self.cursor.fetchall()
-            
-            self.cursor.execute('SELECT DISTINCT user_id FROM users WHERE last_message_date > ?', (yesterday,))
-            active_users = set([row[0] for row in self.cursor.fetchall()])
-            
-            return [user for user in all_users if user[0] not in active_users]
-        except Exception as e:
-            print(f"❌ get_inactive_users_24h hatası: {e}")
-            return []
-
-db = Database()
-
-# === BADÎNÎ ÇEVİRİLER ===
-class BadiniTranslations:
-    @staticmethod
-    def bot_start_message():
-        return "🔰 سوپاس ئەز بوتێ داتایێن گروپی مە. بۆ هاریکاریێ دشێی چێکی /help"
-    
-    @staticmethod
-    def level_up_message(username, level):
-        if level <= 10:
-            title = "Diamond 💎"
-        elif level <= 19:
-            title = "Pro ⚡"
-        elif level <= 29:
-            title = "Pro Leader 👑⚡"
-        elif level <= 39:
-            title = "King 👑"
-        elif level <= 49:
-            title = "Dragon 🐉"
-        elif level <= 59:
-            title = "Myth 🔱✨"
-        else:
-            title = "King Dragon 👑🐉"
-        return f"🎉 دەستخوش {username}! لیفل {level} - {title}"
-    
-    @staticmethod
-    def error_message(error_type="general"):
-        errors = {
-            "wrong_group": "🚫 ئەڤ بوتە تنێ د گروپێ تایبەت دا کار دکەت",
-            "not_admin": "⛔ تنێ ئادمین دشێن ڤی بەشی بکار بینن",
-            "general": "❌ خەلەتیەک چێبی دوبارە هەول بدە",
-            "no_user": "👤 ئەڤ کەسە نەهاتە دیتن"
-        }
-        return errors.get(error_type, errors["general"])
-    
-    @staticmethod
-    def command_descriptions():
-        return {
-            "start": "🔰 /start - بوت دەست پێ بکە",
-            "help": "❓ /help - هەمی فرمانان نیشان بدە",
-            "level": "📊 /level - لیفلێ خۆ نیشان بدە",
-            "stats": "📈 /stats - داتایێن خۆ نیشان بدە",
-            "top": "🏆 /top - ئەندامێن لیفل بلند",
-            "24h": "⏰ /24h - کەسێن 24 سەعتاندا نە ئاخفتین (تەنێ ئادمین)",
-            "nadmin": "👑 /nadmin - ڕێڤەبەرێن نوی ببینە (تەنێ ئادمین)"
-        }
-    
-    @staticmethod
-    def inactive_24h_report(inactive_list):
-        if not inactive_list:
-            return "📊 راپورا 24 سعەتان - هەمی ئاکتیڤن 🎉"
-        
-        message = "📊 راپورا 24 سعەتان - ئەو کەسێن 24 سعەتاندا نە ئاخفتین:\n\n"
-        for user in inactive_list:
-            user_id, username, first_name = user
-            name = f"@{username}" if username else first_name
-            message += f"• {name}\n"
-        
-        message += f"\n📊 کۆ: {len(inactive_list)} کەس"
-        return message
-
-translations = BadiniTranslations()
+# Rapor sistemini başlat
+report_system = ReportSystem(bot, db, ALLOWED_GROUP_ID)
 
 # === YARDIMCI FONKSİYONLAR ===
 def update_admin_cache(chat_id):
@@ -195,8 +29,6 @@ def update_admin_cache(chat_id):
         admins = bot.get_chat_administrators(chat_id)
         admin_cache = set([admin.user.id for admin in admins])
         print(f"✅ Admin cache: {len(admin_cache)} admin")
-        for admin_id in admin_cache:
-            print(f"   - Admin ID: {admin_id}")
     except Exception as e:
         print(f"❌ Admin cache hatası: {e}")
 
@@ -204,13 +36,6 @@ def is_allowed_group(message):
     if message.chat.type == 'private':
         return False
     return message.chat.id == ALLOWED_GROUP_ID
-
-def get_user_display_name(user):
-    if user.username:
-        return f"@{user.username}"
-    elif user.first_name:
-        return user.first_name
-    return "کاربەر"
 
 # === KOMUTLAR ===
 @bot.message_handler(commands=['start'])
@@ -227,7 +52,7 @@ def cmd_start(message):
 
 @bot.message_handler(commands=['help'])
 def cmd_help(message):
-    print(f"📌 /help - User: {message.from_user.id}")
+    print(f"📌 /help")
     try:
         if not is_allowed_group(message):
             bot.reply_to(message, translations.error_message("wrong_group"))
@@ -241,9 +66,51 @@ def cmd_help(message):
     except Exception as e:
         print(f"❌ help hatası: {e}")
 
-@bot.message_handler(commands=['level', 'stats'])
+@bot.message_handler(commands=['level'])
 def cmd_level(message):
-    print(f"📌 /level - User: {message.from_user.id}")
+    print(f"📌 /level")
+    try:
+        if not is_allowed_group(message):
+            bot.reply_to(message, translations.error_message("wrong_group"))
+            return
+        
+        user_id = message.from_user.id
+        stats = db.get_user_stats(user_id)
+        
+        if not stats:
+            user = message.from_user
+            db.add_user(user_id, user.username, user.first_name, user.last_name)
+            stats = db.get_user_stats(user_id)
+        
+        if stats:
+            username, first_name, xp, level, msg_count, last_date = stats
+            name = f"@{username}" if username else first_name
+            title = level_system.get_level_title(level)
+            
+            next_level_xp = (level * 100)
+            xp_needed = next_level_xp - xp
+            
+            msg = f"📊 **LEVEL BİLGİLERİN**\n\n"
+            msg += f"🏆 **Level:** {level} - {title}\n"
+            msg += f"✨ **XP:** {xp}\n"
+            msg += f"💬 **نامه:** {msg_count}\n"
+            
+            if level < 70:
+                msg += f"📈 **بۆ لیفلەکێ نڤ:** {xp_needed} XP\n"
+            
+            if last_date:
+                msg += f"⏰ **دوماهیک نامە:** {last_date[:10]}"
+            
+            bot.reply_to(message, msg)
+        else:
+            bot.reply_to(message, translations.error_message("no_user"))
+    except Exception as e:
+        print(f"❌ level hatası: {e}")
+        bot.reply_to(message, translations.error_message("general"))
+
+@bot.message_handler(commands=['stats'])
+def cmd_stats(message):
+    print(f"📌 /stats")
     try:
         if not is_allowed_group(message):
             bot.reply_to(message, translations.error_message("wrong_group"))
@@ -261,74 +128,40 @@ def cmd_level(message):
             username, first_name, xp, level, msg_count, last_date = stats
             name = f"@{username}" if username else first_name
             
-            if level <= 10:
-                title = "Diamond 💎"
-            elif level <= 19:
-                title = "Pro ⚡"
-            elif level <= 29:
-                title = "Pro Leader 👑⚡"
-            elif level <= 39:
-                title = "King 👑"
-            elif level <= 49:
-                title = "Dragon 🐉"
-            elif level <= 59:
-                title = "Myth 🔱✨"
-            else:
-                title = "King Dragon 👑🐉"
-            
-            next_level_xp = (level * 100)
-            xp_needed = next_level_xp - xp
-            
-            msg = f"📊 داتایێن {name}\n\n"
-            msg += f"🏆 Level: {level} - {title}\n"
-            msg += f"✨ XP: {xp}\n"
-            msg += f"💬 نامە: {msg_count}\n"
-            
-            if level < 70:
-                msg += f"📈 بۆ لیفلەکێ نڤ: {xp_needed} XP\n"
+            msg = f"📊 **İSTATİSTİKLERİN**\n\n"
+            msg += f"👤 **İsim:** {name}\n"
+            msg += f"💬 **Toplam Mesaj:** {msg_count}\n"
+            msg += f"🏆 **Level:** {level}\n"
+            msg += f"✨ **XP:** {xp}\n"
             
             if last_date:
-                msg += f"⏰ دوماهیک نامە: {last_date[:10]}"
+                msg += f"⏰ **Son Mesaj:** {last_date[:10]}"
             
             bot.reply_to(message, msg)
         else:
             bot.reply_to(message, translations.error_message("no_user"))
     except Exception as e:
-        print(f"❌ level hatası: {e}")
+        print(f"❌ stats hatası: {e}")
         bot.reply_to(message, translations.error_message("general"))
 
 @bot.message_handler(commands=['top'])
 def cmd_top(message):
-    print(f"📌 /top - User: {message.from_user.id}")
+    print(f"📌 /top")
     try:
         if not is_allowed_group(message):
             bot.reply_to(message, translations.error_message("wrong_group"))
             return
         
         top_users = db.get_top_users(10)
-        
-        if not top_users:
-            bot.reply_to(message, "🏆 لیستا ڤاله‌یه - هێچ کاربەر نینە")
-            return
-        
-        msg = "🏆 لیستا ڕیزبه‌ندیان\n\n"
-        
-        for i, user in enumerate(top_users, 1):
-            user_id, username, first_name, xp, level, msg_count = user
-            name = f"@{username}" if username else first_name
-            
-            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
-            msg += f"{medal} {name}\n"
-            msg += f"   • Level {level} | {xp} XP | {msg_count} نامە\n\n"
-        
-        bot.reply_to(message, msg)
+        top_msg = level_system.format_top_list(top_users)
+        bot.reply_to(message, top_msg)
     except Exception as e:
         print(f"❌ top hatası: {e}")
         bot.reply_to(message, translations.error_message("general"))
 
 @bot.message_handler(commands=['24h'])
 def cmd_24h(message):
-    print(f"📌 /24h - User: {message.from_user.id}")
+    print(f"📌 /24h")
     try:
         if not is_allowed_group(message):
             bot.reply_to(message, translations.error_message("wrong_group"))
@@ -347,7 +180,7 @@ def cmd_24h(message):
 
 @bot.message_handler(commands=['nadmin'])
 def cmd_nadmin(message):
-    print(f"📌 /nadmin - User: {message.from_user.id}")
+    print(f"📌 /nadmin")
     try:
         if not is_allowed_group(message):
             bot.reply_to(message, translations.error_message("wrong_group"))
@@ -358,24 +191,14 @@ def cmd_nadmin(message):
             return
         
         update_admin_cache(message.chat.id)
-        
-        admin_list = "👑 ڕێڤەبەر:\n\n"
-        for admin_id in admin_cache:
-            try:
-                user = bot.get_chat_member(message.chat.id, admin_id).user
-                name = f"@{user.username}" if user.username else user.first_name
-                admin_list += f"• {name}\n"
-            except:
-                admin_list += f"• ID: {admin_id}\n"
-        
-        bot.reply_to(message, f"👑 ڕێڤەبەر هاتنە دیتن: {len(admin_cache)} کەس\n\n{admin_list}")
+        bot.reply_to(message, f"👑 ڕێڤەبەر هاتنە دیتن: {len(admin_cache)} کەس")
     except Exception as e:
         print(f"❌ nadmin hatası: {e}")
         bot.reply_to(message, translations.error_message("general"))
 
 @bot.message_handler(commands=['testid'])
 def cmd_testid(message):
-    print(f"📌 /testid - User: {message.from_user.id}")
+    print(f"📌 /testid")
     try:
         if message.chat.type == 'private':
             bot.reply_to(message, "🚫 Bu özel sohbet")
@@ -404,36 +227,6 @@ def handle_messages(message):
         if not is_allowed_group(message):
             return
         
-        # Komutları tekrar kontrol et
-        if message.text and message.text.startswith('/'):
-            command = message.text.split()[0].lower()
-            print(f"⚠️ Komut mesaj handler'ında: {command}")
-            
-            if command == '/level':
-                cmd_level(message)
-                return
-            elif command == '/stats':
-                cmd_level(message)
-                return
-            elif command == '/top':
-                cmd_top(message)
-                return
-            elif command == '/24h':
-                cmd_24h(message)
-                return
-            elif command == '/nadmin':
-                cmd_nadmin(message)
-                return
-            elif command == '/testid':
-                cmd_testid(message)
-                return
-            elif command == '/help':
-                cmd_help(message)
-                return
-            elif command == '/start':
-                cmd_start(message)
-                return
-        
         # Normal mesaj - XP ekle
         user = message.from_user
         db.add_user(user.id, user.username, user.first_name, user.last_name)
@@ -442,7 +235,7 @@ def handle_messages(message):
         
         if leveled_up:
             name = get_user_display_name(user)
-            level_msg = translations.level_up_message(name, new_level)
+            level_msg, emoji = level_system.format_level_message(name, new_level)
             bot.reply_to(message, f"🎉🎉🎉\n{level_msg}\n🎉🎉🎉")
             print(f"🎉 Level up: {name} -> {new_level}")
             
@@ -474,7 +267,6 @@ if __name__ == "__main__":
     print("=" * 50)
     print(f"🔑 Token: {BOT_TOKEN[:10]}...")
     print(f"👥 Grup ID: {ALLOWED_GROUP_ID}")
-    print(f"📁 Veritabanı: {DB_NAME}")
     print("-" * 50)
     
     # Admin cache'i güncelle
