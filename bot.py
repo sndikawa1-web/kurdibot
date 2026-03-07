@@ -1,4 +1,4 @@
-# bot.py - TÜM KOMUTLAR ÇALIŞIYOR
+# bot.py - BADÎNÎ BOT SON VERSİYON (TÜM HATALAR DÜZELTİLDİ)
 import telebot
 import os
 import sqlite3
@@ -168,8 +168,8 @@ class BadiniTranslations:
             "level": "📊 /level - لیفلێ خۆ نیشان بدە",
             "stats": "📈 /stats - داتایێن خۆ نیشان بدە",
             "top": "🏆 /top - ئەندامێن لیفل بلند",
-            "24h": "⏰ /24h - کەسێن 24 سەعتاندا نە ئاخفتین",
-            "nadmin": "👑 /nadmin - ڕێڤەبەرێن نوی ببینە"
+            "24h": "⏰ /24h - کەسێن 24 سەعتاندا نە ئاخفتین (تەنێ ئادمین)",
+            "nadmin": "👑 /nadmin - ڕێڤەبەرێن نوی ببینە (تەنێ ئادمین)"
         }
     
     @staticmethod
@@ -212,7 +212,7 @@ def get_user_display_name(user):
         return user.first_name
     return "کاربەر"
 
-# === KOMUTLAR - HEPSİ TEK TEK TANIMLI ===
+# === KOMUTLAR ===
 @bot.message_handler(commands=['start'])
 def cmd_start(message):
     print(f"📌 /start - User: {message.from_user.id}")
@@ -233,11 +233,11 @@ def cmd_help(message):
             bot.reply_to(message, translations.error_message("wrong_group"))
             return
         
-        help_text = "**📋 فرمانێن بوت:**\n\n"
+        help_text = "📋 فرمانێن بوت:\n\n"
         for cmd, desc in translations.command_descriptions().items():
             help_text += f"{desc}\n"
         
-        bot.reply_to(message, help_text, parse_mode='Markdown')
+        bot.reply_to(message, help_text)
     except Exception as e:
         print(f"❌ help hatası: {e}")
 
@@ -253,7 +253,6 @@ def cmd_level(message):
         stats = db.get_user_stats(user_id)
         
         if not stats:
-            # Kullanıcı yoksa ekle
             user = message.from_user
             db.add_user(user_id, user.username, user.first_name, user.last_name)
             stats = db.get_user_stats(user_id)
@@ -262,7 +261,6 @@ def cmd_level(message):
             username, first_name, xp, level, msg_count, last_date = stats
             name = f"@{username}" if username else first_name
             
-            # Level title
             if level <= 10:
                 title = "Diamond 💎"
             elif level <= 19:
@@ -281,18 +279,18 @@ def cmd_level(message):
             next_level_xp = (level * 100)
             xp_needed = next_level_xp - xp
             
-            msg = f"📊 **داتایێن {name}**\n\n"
-            msg += f"🏆 **Level:** {level} - {title}\n"
-            msg += f"✨ **XP:** {xp}\n"
-            msg += f"💬 **نامه:** {msg_count}\n"
+            msg = f"📊 داتایێن {name}\n\n"
+            msg += f"🏆 Level: {level} - {title}\n"
+            msg += f"✨ XP: {xp}\n"
+            msg += f"💬 نامە: {msg_count}\n"
             
             if level < 70:
-                msg += f"📈 **بۆ لیفلەکێ نڤ:** {xp_needed} XP\n"
+                msg += f"📈 بۆ لیفلەکێ نڤ: {xp_needed} XP\n"
             
             if last_date:
-                msg += f"⏰ **دوماهیک نامە:** {last_date[:10]}"
+                msg += f"⏰ دوماهیک نامە: {last_date[:10]}"
             
-            bot.reply_to(message, msg, parse_mode='Markdown')
+            bot.reply_to(message, msg)
         else:
             bot.reply_to(message, translations.error_message("no_user"))
     except Exception as e:
@@ -302,7 +300,7 @@ def cmd_level(message):
 @bot.message_handler(commands=['stats'])
 def cmd_stats(message):
     print(f"📌 /stats - User: {message.from_user.id}")
-    cmd_level(message)  # Aynı fonksiyon
+    cmd_level(message)
 
 @bot.message_handler(commands=['top'])
 def cmd_top(message):
@@ -318,17 +316,17 @@ def cmd_top(message):
             bot.reply_to(message, "🏆 لیستا ڤاله‌یه - هێچ کاربەر نینە")
             return
         
-        msg = "🏆 **لیستا ڕیزبه‌ندیان**\n\n"
+        msg = "🏆 لیستا ڕیزبه‌ندیان\n\n"
         
         for i, user in enumerate(top_users, 1):
             user_id, username, first_name, xp, level, msg_count = user
             name = f"@{username}" if username else first_name
             
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
-            msg += f"{medal} **{name}**\n"
-            msg += f"   • Level {level} | {xp} XP | {msg_count} نامه\n\n"
+            msg += f"{medal} {name}\n"
+            msg += f"   • Level {level} | {xp} XP | {msg_count} نامە\n\n"
         
-        bot.reply_to(message, msg, parse_mode='Markdown')
+        bot.reply_to(message, msg)
     except Exception as e:
         print(f"❌ top hatası: {e}")
         bot.reply_to(message, translations.error_message("general"))
@@ -347,7 +345,7 @@ def cmd_24h(message):
         
         inactive_users = db.get_inactive_users_24h()
         report = translations.inactive_24h_report(inactive_users)
-        bot.reply_to(message, report, parse_mode='Markdown')
+        bot.reply_to(message, report)
     except Exception as e:
         print(f"❌ 24h hatası: {e}")
         bot.reply_to(message, translations.error_message("general"))
@@ -366,7 +364,7 @@ def cmd_nadmin(message):
         
         update_admin_cache(message.chat.id)
         
-        admin_list = "👑 **ڕێڤەبەر:**\n\n"
+        admin_list = "👑 ڕێڤەبەر:\n\n"
         for admin_id in admin_cache:
             try:
                 user = bot.get_chat_member(message.chat.id, admin_id).user
@@ -391,15 +389,15 @@ def cmd_testid(message):
         is_admin = message.from_user.id in admin_cache
         
         msg = (
-            f"📊 **GRUP BİLGİLERİ**\n\n"
-            f"🆔 **Grup ID:** `{message.chat.id}`\n"
-            f"🔑 **İzin verilen:** `{ALLOWED_GROUP_ID}`\n"
-            f"✅ **Eşleşiyor:** {'✅' if message.chat.id == ALLOWED_GROUP_ID else '❌'}\n"
-            f"👤 **Sizin ID:** `{message.from_user.id}`\n"
-            f"👑 **Admin:** {'✅' if is_admin else '❌'}\n"
-            f"📊 **Toplam admin:** {len(admin_cache)}"
+            f"📊 GRUP BİLGİLERİ\n\n"
+            f"🆔 Grup ID: {message.chat.id}\n"
+            f"🔑 İzin verilen: {ALLOWED_GROUP_ID}\n"
+            f"✅ Eşleşiyor: {'✅' if message.chat.id == ALLOWED_GROUP_ID else '❌'}\n"
+            f"👤 Sizin ID: {message.from_user.id}\n"
+            f"👑 Admin: {'✅' if is_admin else '❌'}\n"
+            f"📊 Toplam admin: {len(admin_cache)}"
         )
-        bot.reply_to(message, msg, parse_mode='Markdown')
+        bot.reply_to(message, msg)
     except Exception as e:
         print(f"❌ testid hatası: {e}")
         bot.reply_to(message, f"❌ Hata: {e}")
@@ -411,11 +409,11 @@ def handle_messages(message):
         if not is_allowed_group(message):
             return
         
-        # Komutları tekrar kontrol et (handler sırası karışırsa diye)
+        # Komutları tekrar kontrol et
         if message.text and message.text.startswith('/'):
             command = message.text.split()[0].lower()
-            print(f"⚠️ Komut handler'a düştü: {command}")
-            # Komutları burada da işle - yedek
+            print(f"⚠️ Komut mesaj handler'ında: {command}")
+            
             if command == '/level':
                 cmd_level(message)
                 return
