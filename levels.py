@@ -29,40 +29,44 @@ class LevelSystem:
         else:
             return "King Dragon 👑🐉"
     
-    def format_level_message(self, user_name, old_level, new_level):
-        title = self.get_level_title(new_level)
+    def format_level_message(self, username, level):
+        title = self.get_level_title(level)
+        emoji = self.get_level_emoji(level)
         
-        # Badînî çeviri - sizin verdiğiniz formatta
-        if new_level <= 10:
-            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
-        elif new_level <= 19:
-            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
-        elif new_level <= 29:
-            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
-        elif new_level <= 39:
-            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
-        elif new_level <= 49:
-            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
-        elif new_level <= 59:
-            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
-        else:
-            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
+        message = f"🎉 دەستخوش {username}! لیفل {level} - {title}"
         
-        return message
+        # Özel level mesajları
+        if level == 10:
+            message += "\n\n🌟 تۆ گەهشتیە Level 10! Diamond 💎"
+        elif level == 20:
+            message += "\n\n👑 تۆ گەهشتیە Level 20! Pro Leader"
+        elif level == 30:
+            message += "\n\n👑 تۆ گەهشتیە Level 30! King"
+        elif level == 40:
+            message += "\n\n🐉 تۆ گەهشتیە Level 40! Dragon"
+        elif level == 50:
+            message += "\n\n🔱 تۆ گەهشتیە Level 50! Myth"
+        elif level == 60:
+            message += "\n\n👑🐉 تۆ گەهشتیە Level 60! King Dragon"
+        elif level == 70:
+            message += "\n\n🏆 MAX LEVEL! تۆ گەهشتیە Level 70! 🏆"
+        
+        return message, emoji
     
     def format_top_list(self, top_users):
         if not top_users:
-            return "📊 لیستا ڕیزبه‌ندیان ڤاله‌ یه"
+            return "🏆 لیستا ڤاله‌یه - هێچ کاربەر نینە"
         
-        message = "🏆 **لیستا ڕیزبه‌ندیان ێکی**\n\n"
+        message = "🏆 لیستا ڕیزبه‌ندیان\n\n"
         
         for i, user in enumerate(top_users[:10], 1):
             user_id, username, first_name, xp, level, msg_count = user
             name = f"@{username}" if username else first_name
+            title = self.get_level_title(level)
             
-            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
-            message += f"{medal} {i}. **{name}**\n"
-            message += f"   • Level {level}\n"
-            message += f"   • XP: {xp} | نامه‌: {msg_count}\n\n"
+            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+            message += f"{medal} {name}\n"
+            message += f"   • Level {level} - {title}\n"
+            message += f"   • XP: {xp} | نامە: {msg_count}\n\n"
         
         return message
