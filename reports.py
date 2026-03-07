@@ -48,14 +48,26 @@ class ReportSystem:
     
     def send_weekly_report(self):
         try:
-            weekly_stats = self.db.get_weekly_stats()
+            # Haftalık en aktif kullanıcılar
+            week_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
+            
+            self.db.cursor.execute('''
+                SELECT user_id, COUNT(*) as msg_count 
+                FROM users 
+                WHERE last_message_date > ? 
+                GROUP BY user_id 
+                ORDER BY msg_count DESC 
+                LIMIT 5
+            ''', (week_ago,))
+            
+            weekly_stats = self.db.cursor.fetchall()
             
             message = "📅 **RAPORA HEFANE**\n\n"
             
             if not weekly_stats:
                 message += "ڤی هەفتەیی چالاکی نینە"
             else:
-                for i, (user_id, msg_count) in enumerate(weekly_stats[:5], 1):
+                for i, (user_id, msg_count) in enumerate(weekly_stats, 1):
                     user_data = self.db.get_user_stats(user_id)
                     if user_data:
                         username, first_name, xp, level, total_msgs, _ = user_data
