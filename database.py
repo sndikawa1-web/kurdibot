@@ -41,6 +41,62 @@ class Database:
             print(f"❌ add_user hatası: {e}")
             return False
     
+    def calculate_level_from_xp(self, xp):
+        """ULTRA ZOR level sistemi - XP'den level hesapla"""
+        
+        # Level 1-10 (100 XP each)
+        if xp < 1000:
+            return (xp // 100) + 1
+        
+        # Level 11-15 (200 XP each)
+        elif xp < 2000:  # 1100-1900
+            return 11 + ((xp - 1000) // 200)
+        
+        # Level 16-20 (300 XP each)
+        elif xp < 3500:  # 2200-3400
+            return 16 + ((xp - 2000) // 300)
+        
+        # Level 21-25 (400 XP each)
+        elif xp < 5500:  # 3800-5400
+            return 21 + ((xp - 3500) // 400)
+        
+        # Level 26-30 (500 XP each)
+        elif xp < 8000:  # 5900-7900
+            return 26 + ((xp - 5500) // 500)
+        
+        # Level 31-35 (800 XP each) - AŞIRI ZOR
+        elif xp < 12000:  # 8700-11900
+            return 31 + ((xp - 8000) // 800)
+        
+        # Level 36-40 (1200 XP each) - ÇOK AŞIRI ZOR
+        elif xp < 18000:  # 13100-17900
+            return 36 + ((xp - 12000) // 1200)
+        
+        # Level 41-45 (1800 XP each) - İMKANSIZ
+        elif xp < 27000:  # 19700-26900
+            return 41 + ((xp - 18000) // 1800)
+        
+        # Level 46-50 (2500 XP each) - DELİLİK
+        elif xp < 39500:  # 29400-39400
+            return 46 + ((xp - 27000) // 2500)
+        
+        # Level 51-55 (3500 XP each) - ÇILGINLIK
+        elif xp < 57000:  # 42900-56900
+            return 51 + ((xp - 39500) // 3500)
+        
+        # Level 56-60 (5000 XP each) - EFSANEVİ
+        elif xp < 82000:  # 61900-81900
+            return 56 + ((xp - 57000) // 5000)
+        
+        # Level 61-65 (7000 XP each) - MİTOLOJİK
+        elif xp < 117000:  # 88900-116900
+            return 61 + ((xp - 82000) // 7000)
+        
+        # Level 66-70 (10000 XP each) - TANRISAL
+        else:
+            level = 66 + ((xp - 117000) // 10000)
+            return min(level, 70)
+    
     def update_user_activity(self, user_id):
         try:
             now = datetime.datetime.now().isoformat()
@@ -52,9 +108,7 @@ class Database:
                 xp, level, messages_count = result
                 new_xp = xp + XP_PER_MESSAGE
                 new_messages_count = messages_count + 1
-                new_level = (new_xp // 100) + 1
-                if new_level > 70:
-                    new_level = 70
+                new_level = self.calculate_level_from_xp(new_xp)
                 
                 self.cursor.execute('''
                     UPDATE users 
@@ -65,6 +119,7 @@ class Database:
                 self.conn.commit()
                 
                 if new_level > level:
+                    print(f"🎯 Level atlama: {level} -> {new_level}")
                     return True, new_level
             return False, None
         except Exception as e:
