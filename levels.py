@@ -1,4 +1,4 @@
-# levels.py
+# levels.py - GÜNCELLENMİŞ VERSİYON (Level atlama bildirimi düzenlendi)
 from config import EMOJI_CONFIG
 
 class LevelSystem:
@@ -29,27 +29,42 @@ class LevelSystem:
         else:
             return "King Dragon 👑🐉"
     
-    def format_level_message(self, username, level):
+    def format_level_message(self, username, level, xp):
+        """Level atlama mesajını formatla - YENİ FORMAT"""
         title = self.get_level_title(level)
         emoji = self.get_level_emoji(level)
         
-        message = f"🎉 دەستخوش {username}! لیفل {level} - {title}"
+        # Sonraki level için gereken XP
+        next_level_xp = (level * 100)
+        current_xp = xp
+        xp_needed = next_level_xp - current_xp
+        messages_needed = xp_needed // 10  # Her mesaj 10 XP
         
-        # Özel level mesajları
-        if level == 10:
-            message += "\n\n🌟 تۆ گەهشتیە Level 10! Diamond 💎"
-        elif level == 20:
-            message += "\n\n👑 تۆ گەهشتیە Level 20! Pro Leader"
-        elif level == 30:
-            message += "\n\n👑 تۆ گەهشتیە Level 30! King"
-        elif level == 40:
-            message += "\n\n🐉 تۆ گەهشتیە Level 40! Dragon"
-        elif level == 50:
-            message += "\n\n🔱 تۆ گەهشتیە Level 50! Myth"
-        elif level == 60:
-            message += "\n\n👑🐉 تۆ گەهشتیە Level 60! King Dragon"
-        elif level == 70:
-            message += "\n\n🏆 MAX LEVEL! تۆ گەهشتیە Level 70! 🏆"
+        # Premium emoji HTML formatı
+        emoji_html = ""
+        if emoji:
+            if isinstance(emoji, list):
+                # İki emoji yan yana
+                emoji_html = f'<tg-emoji emoji-id="{emoji[0]}">⭐</tg-emoji><tg-emoji emoji-id="{emoji[1]}">⭐</tg-emoji>'
+            else:
+                # Tek emoji
+                emoji_html = f'<tg-emoji emoji-id="{emoji}">⭐</tg-emoji>'
+        
+        # YENİ FORMAT - tam istediğiniz gibi
+        if level == 70:
+            message = (
+                f"{username}\n"
+                f"🎉🎉 دەستخوش لیفل زێدەبو 🎉🎉\n"
+                f"{title} = {level} {emoji_html}\n"
+                f"🏆 MAX LEVEL! تۆ گەهشتیە Level 70! 🏆"
+            )
+        else:
+            message = (
+                f"{username}\n"
+                f"🎉🎉 دەستخوش لیفل زێدەبو 🎉🎉\n"
+                f"{title} = {level} {emoji_html}\n"
+                f"📊 بۆ لیفلەکێ نڤ: {messages_needed} mesaj"
+            )
         
         return message, emoji
     
