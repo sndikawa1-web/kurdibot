@@ -1,4 +1,4 @@
-# bot.py - TAM DOSYA (GÜNCELLENMİŞ)
+# bot.py - BADÎNÎ BOT TAM GÜNCEL VERSİYON
 import telebot
 import os
 import time
@@ -89,6 +89,7 @@ def cmd_level(message):
             
             next_level_xp = (level * 100)
             xp_needed = next_level_xp - xp
+            messages_needed = xp_needed // 10
             
             msg = f"📊 **LEVEL BİLGİLERİN**\n\n"
             msg += f"🏆 **Level:** {level} - {title}\n"
@@ -96,7 +97,7 @@ def cmd_level(message):
             msg += f"💬 **نامه:** {msg_count}\n"
             
             if level < 70:
-                msg += f"📈 **بۆ لیفلەکێ نڤ:** {xp_needed} XP\n"
+                msg += f"📈 **بۆ لیفلەکێ نڤ:** {messages_needed} mesaj\n"
             
             if last_date:
                 msg += f"⏰ **دوماهیک نامە:** {last_date[:10]}"
@@ -227,6 +228,34 @@ def handle_messages(message):
         if not is_allowed_group(message):
             return
         
+        # Komutları tekrar kontrol et (handler sırası karışırsa diye)
+        if message.text and message.text.startswith('/'):
+            command = message.text.split()[0].lower()
+            if command == '/level':
+                cmd_level(message)
+                return
+            elif command == '/stats':
+                cmd_stats(message)
+                return
+            elif command == '/top':
+                cmd_top(message)
+                return
+            elif command == '/24h':
+                cmd_24h(message)
+                return
+            elif command == '/nadmin':
+                cmd_nadmin(message)
+                return
+            elif command == '/testid':
+                cmd_testid(message)
+                return
+            elif command == '/help':
+                cmd_help(message)
+                return
+            elif command == '/start':
+                cmd_start(message)
+                return
+        
         # Normal mesaj - XP ekle
         user = message.from_user
         db.add_user(user.id, user.username, user.first_name, user.last_name)
@@ -244,13 +273,13 @@ def handle_messages(message):
                 # YENİ FORMAT ile level atlama mesajı
                 level_msg, emoji = level_system.format_level_message(name, new_level, xp)
                 
-                # Premium emoji için HTML parse_mode kullan
+                # Premium emoji için HTML parse_mode ile gönder
                 bot.send_message(
                     message.chat.id,
                     level_msg,
                     parse_mode='HTML'
                 )
-                print(f"🎉 Level up: {name} -> {new_level}")
+                print(f"🎉 LEVEL UP! {name} -> Level {new_level}")
             
     except Exception as e:
         print(f"❌ handle_messages hatası: {e}")
