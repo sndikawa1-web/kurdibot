@@ -1,314 +1,184 @@
-# ==================== VERİTABANI ====================
-import json
-import os
-from datetime import datetime, timedelta
-from config import IRAQ_TZ
+# database.py
+import sqlite3
+import datetime
+from config import DB_NAME, XP_PER_MESSAGE
 
 class Database:
     def __init__(self):
-        self.users_file = 'users.json'
-        self.messages_file = 'messages.json'
-        self.penalties_file = 'penalties.json'
-        self.admins_file = 'admins.json'
-        self.levels_file = 'levels.json'
-        self.records_file = 'records.json'
-        self.hourly_file = 'hourly_stats.json'
-        self.load_data()
+        self.conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+        self.cursor = self.conn.cursor()
+        self.create_tables()
     
-    def load_data(self):
-        files = [self.users_file, self.messages_file, self.penalties_file, 
-                 self.admins_file, self.levels_file, self.records_file, self.hourly_file]
-        for file in files:
-            if not os.path.exists(file):
-                with open(file, 'w', encoding='utf-8') as f:
-                    json.dump({}, f, ensure_ascii=False)
-    
-    # ========== KULLANICI İŞLEMLERİ ==========
-    def get_user(self, user_id):
-        with open(self.users_file, 'r', encoding='utf-8') as f:
-            users = json.load(f)
-        return users.get(str(user_id))
-    
-    def save_user(self, user_id, username, first_name):
-        user_id_str = str(user_id)
-        with open(self.users_file, 'r', encoding='utf-8') as f:
-            users = json.load(f)
+    def create_tables(self):
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                xp INTEGER DEFAULT 0,
+                level INTEGER DEFAULT 1,
+                messages_count INTEGER DEFAULT 0,
+                last_message_date TEXT,
+                joined_date TEXT,
+                is_admin INTEGER DEFAULT 0
+            )
+        ''')
         
-        users[user_id_str] = {
-            'username': username,
-            'first_name': first_name,
-            'user_id': user_id,
-            'last_seen': datetime.now(IRAQ_TZ).isoformat(),
-            'joined_date': users.get(user_id_str, {}).get('joined_date', datetime.now(IRAQ_TZ).isoformat())
-        }
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                message_date TEXT,
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            )
+        ''')
         
-        with open(self.users_file, 'w', encoding='utf-8') as f:
-            json.dump(users, f, ensure_ascii=False, indent=2)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS admins_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                added_date TEXT,
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            )
+        ''')
+        
+        self.conn.commit()
+    
+    def add_user(self, user_id, username, first_name, last_name):
+        now = datetime.datetime.now().isoformat()
+        self.cursor.execute('''
+            INSERT OR REPLACE INTO users 
+            (user_id, username, first_name, last_name, joined_date) 
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, username, first_name, last_name, now))
+        self.conn.commit()
+    
+    def update_user_activity(self, user_id):
+        now = datetime.datetime.now().isoformat()
+        
+        self.cursor.execute('SELECT xp, level, messages_count FROM users WHERE user_id = ?', (user_id,))
+        result = self.cursor.fetchone()
+        
+        if result:
+            xp, level, messages_count = result
+            new_xp = xp + XP_PER_MESSAGE
+            new_messages_count = messages_count + 1
+            new_level = self.calculate_level(new_xp)
+            
+            self.cursor.execute('''
+                INSERT INTO messages (user_id, message_date) VALUES (?, ?)
+            ''', (user_id, now))
+            
+            self.cursor.execute('''
+                UPDATE users 
+                SET xp = ?, level = ?, messages_count = ?, last_message_date = ?
+                WHERE user_id = ?
+            ''', (new_xp, new_level, new_messages_count, now, user_id))
+            
+            self.conn.commit()
+            
+            if new_level > level:
+                return True, new_level, self.get_level_title(new_level)
+        
+        return False, None, None
+    
+    def calculate_level(self, xp):
+        level = (xp // 100) + 1
+        return min(level, 70)
+    
+    def get_level_title(self, level):
+        if level <= 10:
+            return "Diamond 💎"
+        elif level <= 19:
+            return "Pro ⚡"
+        elif level <= 29:
+            return "Pro Leader 👑⚡"
+        elif level <= 39:
+            return "King 👑"
+        elif level <= 49:
+            return "Dragon 🐉"
+        elif level <= 59:
+            return "Myth 🔱✨"
+        else:
+            return "King Dragon 👑🐉"
+    
+    def get_user_stats(self, user_id):
+        self.cursor.execute('''
+            SELECT username, first_name, xp, level, messages_count, last_message_date 
+            FROM users WHERE user_id = ?
+        ''', (user_id,))
+        return self.cursor.fetchone()
+    
+    def get_top_users(self, limit=10):
+        self.cursor.execute('''
+            SELECT user_id, username, first_name, xp, level, messages_count 
+            FROM users 
+            ORDER BY level DESC, xp DESC 
+            LIMIT ?
+        ''', (limit,))
+        return self.cursor.fetchall()
+    
+    def get_inactive_users_24h(self):
+        now = datetime.datetime.now()
+        yesterday = (now - datetime.timedelta(days=1)).isoformat()
+        
+        self.cursor.execute('''
+            SELECT DISTINCT user_id FROM messages 
+            WHERE message_date > ?
+        ''', (yesterday,))
+        
+        active_users = set([row[0] for row in self.cursor.fetchall()])
+        
+        self.cursor.execute('SELECT user_id, username, first_name FROM users')
+        all_users = self.cursor.fetchall()
+        
+        inactive = [user for user in all_users if user[0] not in active_users]
+        return inactive
+    
+    def get_inactive_users_3days(self):
+        now = datetime.datetime.now()
+        three_days_ago = (now - datetime.timedelta(days=3)).isoformat()
+        
+        self.cursor.execute('''
+            SELECT user_id, username, first_name, last_message_date 
+            FROM users 
+            WHERE last_message_date < ? OR last_message_date IS NULL
+        ''', (three_days_ago,))
+        
+        return self.cursor.fetchall()
+    
+    def update_admin_status(self, user_id, is_admin):
+        self.cursor.execute('''
+            UPDATE users SET is_admin = ? WHERE user_id = ?
+        ''', (1 if is_admin else 0, user_id))
+        
+        if is_admin:
+            now = datetime.datetime.now().isoformat()
+            self.cursor.execute('''
+                INSERT OR IGNORE INTO admins_log (user_id, added_date) VALUES (?, ?)
+            ''', (user_id, now))
+        
+        self.conn.commit()
     
     def get_all_users(self):
-        with open(self.users_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        self.cursor.execute('SELECT user_id, username, first_name FROM users')
+        return self.cursor.fetchall()
     
-    # ========== YENİ: TÜM ÜYELERİ ÇEK ==========
-    async def update_all_members(self, context):
-        """Gruptaki TÜM üyeleri çek (mesaj atmayanlar dahil)"""
-        try:
-            from telegram.error import TelegramError
-            all_members = []
-            
-            # Tüm üyeleri çek (bot için özel yöntem)
-            async for member in context.bot.get_chat_members(GROUP_ID):
-                all_members.append(member)
-            
-            with open(self.users_file, 'r', encoding='utf-8') as f:
-                users = json.load(f)
-            
-            for member in all_members:
-                user = member.user
-                user_id = str(user.id)
-                
-                if user_id not in users:
-                    # Yeni üye, hiç mesaj atmamış
-                    users[user_id] = {
-                        'username': user.username,
-                        'first_name': user.first_name,
-                        'user_id': user.id,
-                        'last_seen': '2000-01-01T00:00:00+03:00',  # Çok eski tarih
-                        'joined_date': datetime.now(IRAQ_TZ).isoformat()
-                    }
-            
-            with open(self.users_file, 'w', encoding='utf-8') as f:
-                json.dump(users, f, ensure_ascii=False, indent=2)
-            
-            return len(all_members)
-        except Exception as e:
-            print(f"❌ Üye güncelleme hatası: {e}")
-            return 0
+    def get_weekly_stats(self):
+        now = datetime.datetime.now()
+        week_ago = (now - datetime.timedelta(days=7)).isoformat()
+        
+        self.cursor.execute('''
+            SELECT user_id, COUNT(*) as msg_count 
+            FROM messages 
+            WHERE message_date > ? 
+            GROUP BY user_id 
+            ORDER BY msg_count DESC 
+            LIMIT 10
+        ''', (week_ago,))
+        
+        return self.cursor.fetchall()
     
-    # ========== MESAJ İŞLEMLERİ ==========
-    def add_message(self, user_id):
-        today = datetime.now(IRAQ_TZ).strftime("%Y-%m-%d")
-        user_id_str = str(user_id)
-        
-        with open(self.messages_file, 'r', encoding='utf-8') as f:
-            messages = json.load(f)
-        
-        if today not in messages:
-            messages[today] = {}
-        
-        messages[today][user_id_str] = messages[today].get(user_id_str, 0) + 1
-        
-        with open(self.messages_file, 'w', encoding='utf-8') as f:
-            json.dump(messages, f, ensure_ascii=False, indent=2)
-        
-        # Saatlik istatistik
-        hour_key = datetime.now(IRAQ_TZ).strftime("%Y-%m-%d-%H")
-        with open(self.hourly_file, 'r', encoding='utf-8') as f:
-            hourly = json.load(f)
-        
-        if hour_key not in hourly:
-            hourly[hour_key] = {}
-        
-        hourly[hour_key][user_id_str] = hourly[hour_key].get(user_id_str, 0) + 1
-        
-        with open(self.hourly_file, 'w', encoding='utf-8') as f:
-            json.dump(hourly, f, ensure_ascii=False, indent=2)
-    
-    def get_total_message_count(self, user_id):
-        user_id_str = str(user_id)
-        with open(self.messages_file, 'r', encoding='utf-8') as f:
-            messages = json.load(f)
-        
-        total = 0
-        for daily_msgs in messages.values():
-            total += daily_msgs.get(user_id_str, 0)
-        
-        return total
-    
-    def get_all_users_message_counts(self, hours=24):
-        with open(self.messages_file, 'r', encoding='utf-8') as f:
-            messages = json.load(f)
-        
-        users = self.get_all_users()
-        since_date = (datetime.now(IRAQ_TZ) - timedelta(hours=hours)).date()
-        
-        counts = {}
-        for date_str, daily_msgs in messages.items():
-            msg_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-            if msg_date >= since_date:
-                for user_id, count in daily_msgs.items():
-                    counts[user_id] = counts.get(user_id, 0) + count
-        
-        result = []
-        for user_id, count in counts.items():
-            user_data = users.get(user_id, {})
-            username = user_data.get('username')
-            display = f"@{username}" if username else user_data.get('first_name', '?')
-            result.append((display, count, int(user_id)))
-        
-        result.sort(key=lambda x: x[1], reverse=True)
-        return result
-    
-    # ========== ADMİN İŞLEMLERİ ==========
-    def save_admins(self, admin_list):
-        with open(self.admins_file, 'w', encoding='utf-8') as f:
-            json.dump(admin_list, f, ensure_ascii=False, indent=2)
-    
-    def get_admins(self):
-        with open(self.admins_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    
-    def is_admin(self, user_id):
-        admins = self.get_admins()
-        return str(user_id) in admins
-    
-    # ========== PASİF KULLANICILAR ==========
-    def get_inactive_users_24h(self):
-        users = self.get_all_users()
-        admins = self.get_admins()
-        one_day_ago = datetime.now(IRAQ_TZ) - timedelta(days=1)
-        inactive = []
-        
-        for user_id, user_data in users.items():
-            if user_id in admins:
-                continue
-            last_seen = datetime.fromisoformat(user_data.get('last_seen', '2000-01-01'))
-            if last_seen < one_day_ago:
-                username = user_data.get('username')
-                display = f"@{username}" if username else user_data.get('first_name', '?')
-                inactive.append(display)
-        
-        return inactive
-    
-    # ========== DETAYLI PASİF KULLANICILAR (Etiketli) ==========
-    def get_inactive_users_detailed(self):
-        """24 saat konuşmayanları detaylı getir (user_id ve mention ile)"""
-        users = self.get_all_users()
-        admins = self.get_admins()
-        one_day_ago = datetime.now(IRAQ_TZ) - timedelta(days=1)
-        
-        inactive = []
-        
-        for user_id, user_data in users.items():
-            # Adminleri de listeye ekle (istersen bu satırı kaldır)
-            # if user_id in admins:
-            #     continue
-            
-            last_seen = datetime.fromisoformat(user_data.get('last_seen', '2000-01-01'))
-            
-            if last_seen < one_day_ago:
-                user_id_int = user_data.get('user_id')
-                username = user_data.get('username')
-                first_name = user_data.get('first_name', '?')
-                
-                # Etiket formatı
-                if username:
-                    mention = f"@{username}"
-                else:
-                    # İsmi etiketle (Telegram'da isimler etiketlenir)
-                    mention = f"[{first_name}](tg://user?id={user_id_int})"
-                
-                inactive.append((user_id_int, mention))
-        
-        return inactive
-    
-    # ========== HATIRLATMA SİSTEMİ ==========
-    def get_users_for_reminder(self):
-        users = self.get_all_users()
-        admins = self.get_admins()
-        now = datetime.now(IRAQ_TZ)
-        one_day_ago = now - timedelta(days=1)
-        three_days_ago = now - timedelta(days=3)
-        
-        reminder_24h = []
-        reminder_3d = []
-        
-        for user_id, user_data in users.items():
-            if user_id in admins:
-                continue
-                
-            last_seen = datetime.fromisoformat(user_data.get('last_seen', '2000-01-01'))
-            username = user_data.get('username')
-            first_name = user_data.get('first_name', '?')
-            
-            display = f"@{username}" if username else first_name
-            user_id_int = user_data.get('user_id')
-            
-            if last_seen < one_day_ago and last_seen >= three_days_ago:
-                reminder_24h.append((user_id_int, display))
-            elif last_seen < three_days_ago:
-                reminder_3d.append((user_id_int, display))
-        
-        return reminder_24h, reminder_3d
-    
-    # ========== CEZA İŞLEMLERİ ==========
-    def update_penalties(self):
-        with open(self.penalties_file, 'r', encoding='utf-8') as f:
-            penalties = json.load(f)
-        
-        users = self.get_all_users()
-        admins = self.get_admins()
-        one_day_ago = datetime.now(IRAQ_TZ) - timedelta(days=1)
-        
-        for user_id, user_data in users.items():
-            if user_id in admins:
-                continue
-            
-            last_seen = datetime.fromisoformat(user_data.get('last_seen', '2000-01-01'))
-            if last_seen < one_day_ago:
-                if user_id not in penalties:
-                    penalties[user_id] = {'count': 0, 'last_message': None}
-                penalties[user_id]['count'] = penalties[user_id].get('count', 0) + 1
-        
-        with open(self.penalties_file, 'w', encoding='utf-8') as f:
-            json.dump(penalties, f, ensure_ascii=False, indent=2)
-        
-        return penalties
-    
-    def get_users_with_3_penalties(self):
-        with open(self.penalties_file, 'r', encoding='utf-8') as f:
-            penalties = json.load(f)
-        
-        users = self.get_all_users()
-        admins = self.get_admins()
-        result = []
-        
-        for user_id, data in penalties.items():
-            if user_id in admins:
-                continue
-            if data.get('count', 0) >= 3:
-                user_data = users.get(user_id, {})
-                username = user_data.get('username')
-                display = f"@{username}" if username else user_data.get('first_name', '?')
-                result.append((int(user_id), display))
-        
-        return result
-    
-    def reset_penalty(self, user_id):
-        user_id_str = str(user_id)
-        with open(self.penalties_file, 'r', encoding='utf-8') as f:
-            penalties = json.load(f)
-        
-        if user_id_str in penalties:
-            penalties[user_id_str]['count'] = 0
-            penalties[user_id_str]['last_message'] = datetime.now(IRAQ_TZ).isoformat()
-            
-            with open(self.penalties_file, 'w', encoding='utf-8') as f:
-                json.dump(penalties, f, ensure_ascii=False, indent=2)
-    
-    # ========== AKTİF SAATLER ==========
-    def get_most_active_hours(self, days=7):
-        with open(self.hourly_file, 'r', encoding='utf-8') as f:
-            hourly = json.load(f)
-        
-        since = (datetime.now(IRAQ_TZ) - timedelta(days=days)).strftime("%Y-%m-%d")
-        
-        hour_counts = {}
-        for hour_key, users in hourly.items():
-            if hour_key >= since:
-                hour = hour_key.split('-')[3]
-                total = sum(users.values())
-                hour_counts[hour] = hour_counts.get(hour, 0) + total
-        
-        top = sorted(hour_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-        return [(f"{h}:00", count) for h, count in top]
+    def close(self):
+        self.conn.close()
