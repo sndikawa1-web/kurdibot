@@ -1,4 +1,4 @@
-# levels.py - GÜNCELLENMİŞ VERSİYON (Level atlama bildirimi düzenlendi)
+# levels.py - SİZİN SEVİYE SİSTEMİNİZ + PREMIUM EMOJİ
 from config import EMOJI_CONFIG
 
 class LevelSystem:
@@ -6,35 +6,36 @@ class LevelSystem:
         self.emoji_config = EMOJI_CONFIG
     
     def get_level_emoji(self, level):
+        """Level'a göre premium emoji ID'sini döndür"""
         if level in self.emoji_config:
             return self.emoji_config[level]["emoji_id"]
         return None
     
     def get_level_title(self, level):
-        if level in self.emoji_config:
-            return self.emoji_config[level]["title"]
-        
-        if level <= 10:
+        """SİZİN SEVİYE SİSTEMİNİZ"""
+        if 1 <= level <= 10:
             return "Diamond 💎"
-        elif level <= 19:
+        elif 11 <= level <= 19:
             return "Pro ⚡"
-        elif level <= 29:
+        elif 20 <= level <= 29:
             return "Pro Leader 👑⚡"
-        elif level <= 39:
+        elif 30 <= level <= 39:
             return "King 👑"
-        elif level <= 49:
+        elif 40 <= level <= 49:
             return "Dragon 🐉"
-        elif level <= 59:
+        elif 50 <= level <= 59:
             return "Myth 🔱✨"
-        else:
+        elif 60 <= level <= 70:
             return "King Dragon 👑🐉"
+        else:
+            return "Unknown"
     
     def format_level_message(self, username, level, xp):
-        """Level atlama mesajını formatla - YENİ FORMAT"""
+        """Level atlama mesajı - SİZİN İSTEDİĞİNİZ FORMAT"""
         title = self.get_level_title(level)
         emoji = self.get_level_emoji(level)
         
-        # Sonraki level için gereken XP
+        # Sonraki level için gereken mesaj sayısı
         next_level_xp = (level * 100)
         current_xp = xp
         xp_needed = next_level_xp - current_xp
@@ -50,7 +51,7 @@ class LevelSystem:
                 # Tek emoji
                 emoji_html = f'<tg-emoji emoji-id="{emoji}">⭐</tg-emoji>'
         
-        # YENİ FORMAT - tam istediğiniz gibi
+        # SİZİN İSTEDİĞİNİZ FORMAT
         if level == 70:
             message = (
                 f"{username}\n"
@@ -69,6 +70,7 @@ class LevelSystem:
         return message, emoji
     
     def format_top_list(self, top_users):
+        """Lider tablosu"""
         if not top_users:
             return "🏆 لیستا ڤاله‌یه - هێچ کاربەر نینە"
         
