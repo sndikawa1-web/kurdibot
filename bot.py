@@ -1,4 +1,4 @@
-# bot.py - BADÎNÎ BOT TAM GÜNCEL VERSİYON
+# bot.py - ANA DOSYA
 import telebot
 import os
 import time
@@ -87,9 +87,39 @@ def cmd_level(message):
             name = f"@{username}" if username else first_name
             title = level_system.get_level_title(level)
             
-            next_level_xp = (level * 100)
-            xp_needed = next_level_xp - xp
-            messages_needed = xp_needed // 10
+            # Sonraki level için gereken XP
+            if level < 70:
+                if level < 11:
+                    next_xp = level * 100
+                elif level < 16:
+                    next_xp = 1000 + ((level - 10) * 200)
+                elif level < 21:
+                    next_xp = 2000 + ((level - 15) * 300)
+                elif level < 26:
+                    next_xp = 3500 + ((level - 20) * 400)
+                elif level < 31:
+                    next_xp = 5500 + ((level - 25) * 500)
+                elif level < 36:
+                    next_xp = 8000 + ((level - 30) * 800)
+                elif level < 41:
+                    next_xp = 12000 + ((level - 35) * 1200)
+                elif level < 46:
+                    next_xp = 18000 + ((level - 40) * 1800)
+                elif level < 51:
+                    next_xp = 27000 + ((level - 45) * 2500)
+                elif level < 56:
+                    next_xp = 39500 + ((level - 50) * 3500)
+                elif level < 61:
+                    next_xp = 57000 + ((level - 55) * 5000)
+                elif level < 66:
+                    next_xp = 82000 + ((level - 60) * 7000)
+                else:
+                    next_xp = 117000 + ((level - 65) * 10000)
+                
+                xp_needed = next_xp - xp
+                messages_needed = (xp_needed + 9) // 10
+            else:
+                messages_needed = 0
             
             msg = f"📊 **LEVEL BİLGİLERİN**\n\n"
             msg += f"🏆 **Level:** {level} - {title}\n"
