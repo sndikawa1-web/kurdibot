@@ -1,101 +1,68 @@
-# ==================== SEVİYE SİSTEMİ ====================
-import json
-import os
-from datetime import datetime
-from config import IRAQ_TZ
+# levels.py
+from config import EMOJI_CONFIG
 
 class LevelSystem:
-    def __init__(self, db):
-        self.db = db
-        self.levels_file = 'levels.json'
+    def __init__(self):
+        self.emoji_config = EMOJI_CONFIG
     
-    def calculate_level(self, xp):
-        """XP'ye göre level hesapla"""
-        if xp < 3000:
-            return 1 + (xp // 200)
-        elif xp < 9000:
-            return 15 + ((xp - 3000) // 300)
+    def get_level_emoji(self, level):
+        if level in self.emoji_config:
+            return self.emoji_config[level]["emoji_id"]
+        return None
+    
+    def get_level_title(self, level):
+        if level in self.emoji_config:
+            return self.emoji_config[level]["title"]
+        
+        if level <= 10:
+            return "Diamond 💎"
+        elif level <= 19:
+            return "Pro ⚡"
+        elif level <= 29:
+            return "Pro Leader 👑⚡"
+        elif level <= 39:
+            return "King 👑"
+        elif level <= 49:
+            return "Dragon 🐉"
+        elif level <= 59:
+            return "Myth 🔱✨"
         else:
-            return 30 + ((xp - 9000) // 500)
+            return "King Dragon 👑🐉"
     
-    def get_xp_for_level(self, level):
-        if level <= 15:
-            return (level - 1) * 200
-        elif level <= 30:
-            return 3000 + (level - 15) * 300
+    def format_level_message(self, user_name, old_level, new_level):
+        title = self.get_level_title(new_level)
+        
+        # Badînî çeviri - sizin verdiğiniz formatta
+        if new_level <= 10:
+            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
+        elif new_level <= 19:
+            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
+        elif new_level <= 29:
+            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
+        elif new_level <= 39:
+            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
+        elif new_level <= 49:
+            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
+        elif new_level <= 59:
+            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
         else:
-            return 9000 + (level - 30) * 500
+            message = f"🎉 دەستخوش {user_name} گەهشتیە لیفل {new_level}! رتبە {title}"
+        
+        return message
     
-    def get_level_emoji_id(self, level):
-        from messages import Messages
-        if level <= 5:
-            return Messages.LEVEL_EMOJI_IDS['1-5']
-        elif level <= 10:
-            return Messages.LEVEL_EMOJI_IDS['6-10']
-        elif level <= 15:
-            return Messages.LEVEL_EMOJI_IDS['11-15']
-        elif level <= 20:
-            return Messages.LEVEL_EMOJI_IDS['16-20']
-        elif level <= 25:
-            return Messages.LEVEL_EMOJI_IDS['21-25']
-        elif level <= 30:
-            return Messages.LEVEL_EMOJI_IDS['26-30']
-        elif level <= 40:
-            return Messages.LEVEL_EMOJI_IDS['31-40']
-        elif level <= 50:
-            return Messages.LEVEL_EMOJI_IDS['41-50']
-        else:
-            return Messages.LEVEL_EMOJI_IDS['51+']
-    
-    def update_user(self, user_id, username, total_messages):
-        """Kullanıcının seviyesini güncelle - DÜZELTİLDİ"""
-        user_id_str = str(user_id)
+    def format_top_list(self, top_users):
+        if not top_users:
+            return "📊 لیستا ڕیزبه‌ندیان ڤاله‌ یه"
         
-        # Dosyayı oku
-        try:
-            with open(self.levels_file, 'r', encoding='utf-8') as f:
-                levels = json.load(f)
-        except:
-            levels = {}
+        message = "🏆 **لیستا ڕیزبه‌ندیان ێکی**\n\n"
         
-        # XP hesapla
-        xp = total_messages * 10
-        new_level = self.calculate_level(xp)
-        
-        # İlk kez kayıt
-        if user_id_str not in levels:
-            levels[user_id_str] = {
-                'user_id': user_id,
-                'username': username,
-                'level': new_level,
-                'xp': xp,
-                'total_messages': total_messages,
-                'last_update': datetime.now(IRAQ_TZ).isoformat()
-            }
+        for i, user in enumerate(top_users[:10], 1):
+            user_id, username, first_name, xp, level, msg_count = user
+            name = f"@{username}" if username else first_name
             
-            with open(self.levels_file, 'w', encoding='utf-8') as f:
-                json.dump(levels, f, ensure_ascii=False, indent=2)
-            
-            # İlk kayıtta level 1'den büyükse bildirim GÖNDER
-            return new_level > 1, new_level
+            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
+            message += f"{medal} {i}. **{name}**\n"
+            message += f"   • Level {level}\n"
+            message += f"   • XP: {xp} | نامه‌: {msg_count}\n\n"
         
-        # Var olan kayıt
-        old_level = levels[user_id_str]['level']
-        old_xp = levels[user_id_str]['xp']
-        
-        # Sadece değişiklik varsa güncelle
-        if old_xp != xp or old_level != new_level:
-            levels[user_id_str].update({
-                'xp': xp,
-                'level': new_level,
-                'total_messages': total_messages,
-                'last_update': datetime.now(IRAQ_TZ).isoformat()
-            })
-            
-            with open(self.levels_file, 'w', encoding='utf-8') as f:
-                json.dump(levels, f, ensure_ascii=False, indent=2)
-            
-            # Level atladıysa bildirim GÖNDER
-            return new_level > old_level, new_level
-        
-        return False, new_level
+        return message
