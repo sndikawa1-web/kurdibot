@@ -1,4 +1,4 @@
-# bot.py
+# bot.py - TAM DOSYA (GÜNCELLENMİŞ)
 import telebot
 import os
 import time
@@ -235,9 +235,22 @@ def handle_messages(message):
         
         if leveled_up:
             name = get_user_display_name(user)
-            level_msg, emoji = level_system.format_level_message(name, new_level)
-            bot.reply_to(message, f"🎉🎉🎉\n{level_msg}\n🎉🎉🎉")
-            print(f"🎉 Level up: {name} -> {new_level}")
+            
+            # Kullanıcının güncel XP'sini al
+            stats = db.get_user_stats(user.id)
+            if stats:
+                username, first_name, xp, level, msg_count, last_date = stats
+                
+                # YENİ FORMAT ile level atlama mesajı
+                level_msg, emoji = level_system.format_level_message(name, new_level, xp)
+                
+                # Premium emoji için HTML parse_mode kullan
+                bot.send_message(
+                    message.chat.id,
+                    level_msg,
+                    parse_mode='HTML'
+                )
+                print(f"🎉 Level up: {name} -> {new_level}")
             
     except Exception as e:
         print(f"❌ handle_messages hatası: {e}")
