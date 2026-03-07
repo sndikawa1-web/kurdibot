@@ -1,4 +1,4 @@
-# levels.py - SİZİN SEVİYE SİSTEMİNİZ + PREMIUM EMOJİ
+# levels.py
 from config import EMOJI_CONFIG
 
 class LevelSystem:
@@ -12,7 +12,7 @@ class LevelSystem:
         return None
     
     def get_level_title(self, level):
-        """SİZİN SEVİYE SİSTEMİNİZ"""
+        """SİZİN LEVEL ÜNVANLARINIZ"""
         if 1 <= level <= 10:
             return "Diamond 💎"
         elif 11 <= level <= 19:
@@ -35,11 +35,40 @@ class LevelSystem:
         title = self.get_level_title(level)
         emoji = self.get_level_emoji(level)
         
-        # Sonraki level için gereken mesaj sayısı
-        next_level_xp = (level * 100)
-        current_xp = xp
-        xp_needed = next_level_xp - current_xp
-        messages_needed = xp_needed // 10  # Her mesaj 10 XP
+        # Sonraki level için gereken XP ve mesaj sayısı
+        if level == 70:
+            messages_needed = 0
+        else:
+            # Basit hesaplama (gerçekte database'deki hesaplama ile aynı olmalı)
+            if level < 11:
+                next_xp = level * 100
+            elif level < 16:
+                next_xp = 1000 + ((level - 10) * 200)
+            elif level < 21:
+                next_xp = 2000 + ((level - 15) * 300)
+            elif level < 26:
+                next_xp = 3500 + ((level - 20) * 400)
+            elif level < 31:
+                next_xp = 5500 + ((level - 25) * 500)
+            elif level < 36:
+                next_xp = 8000 + ((level - 30) * 800)
+            elif level < 41:
+                next_xp = 12000 + ((level - 35) * 1200)
+            elif level < 46:
+                next_xp = 18000 + ((level - 40) * 1800)
+            elif level < 51:
+                next_xp = 27000 + ((level - 45) * 2500)
+            elif level < 56:
+                next_xp = 39500 + ((level - 50) * 3500)
+            elif level < 61:
+                next_xp = 57000 + ((level - 55) * 5000)
+            elif level < 66:
+                next_xp = 82000 + ((level - 60) * 7000)
+            else:
+                next_xp = 117000 + ((level - 65) * 10000)
+            
+            xp_needed = next_xp - xp
+            messages_needed = max(1, (xp_needed + 9) // 10)  # Yukarı yuvarla
         
         # Premium emoji HTML formatı
         emoji_html = ""
