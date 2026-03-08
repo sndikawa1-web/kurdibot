@@ -67,3 +67,9 @@ def get_user_display_name(user):
     elif user.first_name:
         return user.first_name
     return "کاربەر"
+
+def truncate_tag(tag, max_length=16):
+    """Etiket çok uzunsa kısalt"""
+    if len(tag) > max_length:
+        return tag[:max_length-3] + "..."
+    return tag
