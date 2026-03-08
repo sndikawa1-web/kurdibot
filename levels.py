@@ -27,6 +27,25 @@ class LevelSystem:
         else:
             return "Unknown"
     
+    def get_level_tag(self, level):
+        """Level'a göre etiket (tag) döndür - Admin panelinde görünecek"""
+        if 1 <= level <= 10:
+            return "💎 Diamond"
+        elif 11 <= level <= 19:
+            return "⚡ Pro"
+        elif 20 <= level <= 29:
+            return "👑⚡ Pro Leader"
+        elif 30 <= level <= 39:
+            return "👑 King"
+        elif 40 <= level <= 49:
+            return "🐉 Dragon"
+        elif 50 <= level <= 59:
+            return "🔱✨ Myth"
+        elif 60 <= level <= 70:
+            return "👑🐉 King Dragon"
+        else:
+            return "👤 Member"
+    
     def get_level_emoji(self, level):
         """Level'a göre config'deki emoji ID'sini döndür"""
         if level in self.emoji_config:
