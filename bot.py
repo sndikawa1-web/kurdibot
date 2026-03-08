@@ -253,6 +253,48 @@ def cmd_testid(message):
         print(f"❌ testid hatası: {e}")
         bot.reply_to(message, f"❌ Hata: {e}")
 
+# === TEST KOMUTU - Etiket değişimini dene ===
+@bot.message_handler(commands=['testtag'])
+def cmd_testtag(message):
+    """TEST: Kendi etiketini değiştir"""
+    try:
+        if not is_allowed_group(message):
+            bot.reply_to(message, "🚫 Bu komut sadece grupta çalışır")
+            return
+        
+        user = message.from_user
+        new_tag = "🔧 TEST TAG"
+        
+        # Etiket değiştirme dene
+        bot.promote_chat_member(
+            message.chat.id,
+            user.id,
+            can_change_info=False,
+            can_delete_messages=False,
+            can_invite_users=False,
+            can_pin_messages=False,
+            can_promote_members=False,
+            can_manage_chat=False,
+            can_restrict_members=False,
+            can_manage_video_chats=False,
+            can_post_messages=False,
+            can_edit_messages=False,
+            is_anonymous=False
+        )
+        
+        bot.set_chat_administrator_custom_title(
+            message.chat.id,
+            user.id,
+            new_tag
+        )
+        
+        bot.reply_to(message, f"✅ Etiketin '{new_tag}' olarak değiştirildi! (Admin oldun)")
+        
+    except ApiTelegramException as e:
+        bot.reply_to(message, f"❌ Hata: {e}")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Hata: {e}")
+
 # === MESAJ İŞLEYİCİ ===
 @bot.message_handler(func=lambda message: True, content_types=['text'])
 def handle_messages(message):
@@ -280,6 +322,9 @@ def handle_messages(message):
                 return
             elif command == '/testid':
                 cmd_testid(message)
+                return
+            elif command == '/testtag':
+                cmd_testtag(message)
                 return
             elif command == '/help':
                 cmd_help(message)
@@ -317,41 +362,49 @@ def handle_messages(message):
                     # Yeni level'a göre etiketi al
                     new_tag = level_system.get_level_tag(new_level)
                     
-                    # Kullanıcıyı geçici olarak admin yap ve etiket ver
-                    # Not: Bu işlem için botun admin yetkisi olmalı
-                    bot.promote_chat_member(
-                        message.chat.id,
-                        user.id,
-                        can_change_info=False,
-                        can_delete_messages=False,
-                        can_invite_users=False,
-                        can_pin_messages=False,
-                        can_promote_members=False,
-                        can_manage_chat=False,
-                        can_restrict_members=False,
-                        can_manage_video_chats=False,
-                        can_post_messages=False,
-                        can_edit_messages=False,
-                        is_anonymous=False
-                    )
-                    
-                    # Etiketi (başlığı) ayarla
-                    bot.set_chat_administrator_custom_title(
-                        message.chat.id,
-                        user.id,
-                        new_tag
-                    )
-                    
-                    print(f"✅ {name} etiketi '{new_tag}' olarak değiştirildi")
-                    
-                except ApiTelegramException as e:
-                    if "not enough rights" in str(e) or "need administrator rights" in str(e):
-                        print(f"⚠️ Yetki hatası: Bot admin değil veya etiket değiştirme yetkisi yok")
-                    elif "CHAT_ADMIN_REQUIRED" in str(e):
-                        print(f"⚠️ Kullanıcı zaten admin olabilir, etiket değiştirilemedi")
-                    else:
-                        print(f"❌ Etiket değiştirme hatası: {e}")
-                        traceback.print_exc()
+                    # Kullanıcıyı admin yap ve etiket ver
+                    try:
+                        bot.promote_chat_member(
+                            message.chat.id,
+                            user.id,
+                            can_change_info=False,
+                            can_delete_messages=False,
+                            can_invite_users=False,
+                            can_pin_messages=False,
+                            can_promote_members=False,
+                            can_manage_chat=False,
+                            can_restrict_members=False,
+                            can_manage_video_chats=False,
+                            can_post_messages=False,
+                            can_edit_messages=False,
+                            is_anonymous=False
+                        )
+                        
+                        # Etiketi (başlığı) ayarla
+                        bot.set_chat_administrator_custom_title(
+                            message.chat.id,
+                            user.id,
+                            new_tag
+                        )
+                        
+                        print(f"✅ {name} etiketi '{new_tag}' olarak değiştirildi (admin yapıldı)")
+                        
+                        # Başarılı mesajı (opsiyonel)
+                        # bot.send_message(message.chat.id, f"🏆 {name} artık **{new_tag}** oldu!")
+                        
+                    except ApiTelegramException as e:
+                        if "not enough rights" in str(e) or "need administrator rights" in str(e):
+                            print(f"⚠️ Bot yetkisi yok: {e}")
+                            # Bot yetkisi yoksa sadece level mesajı gönder
+                            pass
+                        elif "user is not an administrator" in str(e):
+                            print(f"⚠️ Kullanıcı admin yapılamadı: {e}")
+                            # Bu hata normalde olmamalı, ama olursa pass
+                            pass
+                        else:
+                            print(f"❌ Admin yapma hatası: {e}")
+                            traceback.print_exc()
+                            
                 except Exception as e:
                     print(f"❌ Etiket değiştirme hatası: {e}")
                     traceback.print_exc()
@@ -360,6 +413,7 @@ def handle_messages(message):
             
     except Exception as e:
         print(f"❌ handle_messages hatası: {e}")
+        traceback.print_exc()
 
 # === GRUP OLAYLARI ===
 @bot.message_handler(content_types=['new_chat_members'])
@@ -402,6 +456,7 @@ if __name__ == "__main__":
     print("   • /24h (admin)")
     print("   • /nadmin (admin)")
     print("   • /testid")
+    print("   • /testtag (test için)")
     print("-" * 50)
     print("🚀 Polling başlıyor...")
     print("=" * 50)
