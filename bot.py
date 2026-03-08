@@ -1,8 +1,9 @@
-# bot.py - ANA DOSYA (GÜNCEL - NORMAL KULLANICILARA ETİET ÖZELLİKLİ)
+# bot.py - ANA DOSYA (GÜNCEL - NORMAL KULLANICILARA ETİKET ÖZELLİKLİ)
 import telebot
 import os
 import time
 import traceback
+import requests
 from telebot import types
 from telebot.apihelper import ApiTelegramException
 
@@ -38,6 +39,28 @@ def is_allowed_group(message):
     if message.chat.type == 'private':
         return False
     return message.chat.id == ALLOWED_GROUP_ID
+
+def set_user_title(chat_id, user_id, title):
+    """Doğrudan Telegram API ile kullanıcı etiketi değiştir"""
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/setChatMemberTitle"
+        data = {
+            "chat_id": chat_id,
+            "user_id": user_id,
+            "custom_title": title[:16]  # Telegram 16 karakter sınırı
+        }
+        
+        response = requests.post(url, data=data)
+        result = response.json()
+        
+        if result.get("ok"):
+            return True, None
+        else:
+            error = result.get("description", "Bilinmeyen hata")
+            return False, error
+            
+    except Exception as e:
+        return False, str(e)
 
 # === KOMUTLAR ===
 @bot.message_handler(commands=['start'])
@@ -265,21 +288,17 @@ def cmd_testtag(message):
         user = message.from_user
         new_tag = "🔧 TEST TAG"
         
-        # YENİ METOD: Normal kullanıcıya etiket ekle
-        bot.set_chat_member_title(
-            message.chat.id,
-            user.id,
-            new_tag
-        )
+        # Doğrudan Telegram API'yi çağır
+        success, error = set_user_title(message.chat.id, user.id, new_tag)
         
-        bot.reply_to(message, f"✅ Etiketin '{new_tag}' olarak değiştirildi! (Admin olmadın)")
-        
-    except ApiTelegramException as e:
-        error_msg = str(e)
-        if "not enough rights" in error_msg:
-            bot.reply_to(message, "❌ Bot yetkisi yok! Lütfen botu grupta admin yap ve 'Üye Etiketlerini Düzenle' yetkisini ver.")
+        if success:
+            bot.reply_to(message, f"✅ Etiketin '{new_tag}' olarak değiştirildi! (Admin olmadın)")
         else:
-            bot.reply_to(message, f"❌ Hata: {e}")
+            if "not enough rights" in error:
+                bot.reply_to(message, "❌ Bot yetkisi yok! Lütfen botu grupta admin yap ve 'Üye Etiketlerini Düzenle' yetkisini ver.")
+            else:
+                bot.reply_to(message, f"❌ Hata: {error}")
+        
     except Exception as e:
         bot.reply_to(message, f"❌ Hata: {e}")
 
@@ -350,26 +369,19 @@ def handle_messages(message):
                     # Yeni level'a göre etiketi al
                     new_tag = level_system.get_level_tag(new_level)
                     
-                    # Telegram'ın yeni metodu: Normal kullanıcıya etiket ver
-                    # Not: Bu metod için botun "Üye Etiketlerini Düzenle" yetkisi olmalı
-                    bot.set_chat_member_title(
-                        message.chat.id,
-                        user.id,
-                        new_tag
-                    )
+                    # Doğrudan Telegram API ile etiket değiştir
+                    success, error = set_user_title(message.chat.id, user.id, new_tag)
                     
-                    print(f"✅ {name} etiketi '{new_tag}' olarak değiştirildi")
-                    
-                    # İsteğe bağlı: Başarılı mesajı gönder
-                    # bot.send_message(message.chat.id, f"🏆 {name} artık **{new_tag}** oldu!")
-                    
-                except ApiTelegramException as e:
-                    if "not enough rights" in str(e):
-                        print(f"⚠️ Bot yetkisi yok: 'Üye Etiketlerini Düzenle' yetkisini kontrol et")
-                    elif "USER_NOT_MEMBER" in str(e):
-                        print(f"⚠️ Kullanıcı grupta değil")
+                    if success:
+                        print(f"✅ {name} etiketi '{new_tag}' olarak değiştirildi")
+                        # İsteğe bağlı: Başarılı mesajı gönder
+                        # bot.send_message(message.chat.id, f"🏆 {name} artık **{new_tag}** oldu!")
                     else:
-                        print(f"❌ Etiket değiştirme hatası: {e}")
+                        if "not enough rights" in error:
+                            print(f"⚠️ Bot yetkisi yok: 'Üye Etiketlerini Düzenle' yetkisini kontrol et")
+                        else:
+                            print(f"❌ Etiket değiştirme hatası: {error}")
+                            
                 except Exception as e:
                     print(f"❌ Etiket değiştirme hatası: {e}")
                 
