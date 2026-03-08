@@ -1,8 +1,10 @@
-# bot.py - ANA DOSYA
+# bot.py - ANA DOSYA (GÜNCEL - ETİKET DEĞİŞTİRME ÖZELLİKLİ)
 import telebot
 import os
 import time
+import traceback
 from telebot import types
+from telebot.apihelper import ApiTelegramException
 
 from config import BOT_TOKEN, ALLOWED_GROUP_ID
 from database import Database
@@ -309,6 +311,51 @@ def handle_messages(message):
                     level_msg,
                     parse_mode='HTML'
                 )
+                
+                # === YENİ: Kullanıcının etiketini (başlığını) değiştir ===
+                try:
+                    # Yeni level'a göre etiketi al
+                    new_tag = level_system.get_level_tag(new_level)
+                    
+                    # Kullanıcıyı geçici olarak admin yap ve etiket ver
+                    # Not: Bu işlem için botun admin yetkisi olmalı
+                    bot.promote_chat_member(
+                        message.chat.id,
+                        user.id,
+                        can_change_info=False,
+                        can_delete_messages=False,
+                        can_invite_users=False,
+                        can_pin_messages=False,
+                        can_promote_members=False,
+                        can_manage_chat=False,
+                        can_restrict_members=False,
+                        can_manage_video_chats=False,
+                        can_post_messages=False,
+                        can_edit_messages=False,
+                        is_anonymous=False
+                    )
+                    
+                    # Etiketi (başlığı) ayarla
+                    bot.set_chat_administrator_custom_title(
+                        message.chat.id,
+                        user.id,
+                        new_tag
+                    )
+                    
+                    print(f"✅ {name} etiketi '{new_tag}' olarak değiştirildi")
+                    
+                except ApiTelegramException as e:
+                    if "not enough rights" in str(e) or "need administrator rights" in str(e):
+                        print(f"⚠️ Yetki hatası: Bot admin değil veya etiket değiştirme yetkisi yok")
+                    elif "CHAT_ADMIN_REQUIRED" in str(e):
+                        print(f"⚠️ Kullanıcı zaten admin olabilir, etiket değiştirilemedi")
+                    else:
+                        print(f"❌ Etiket değiştirme hatası: {e}")
+                        traceback.print_exc()
+                except Exception as e:
+                    print(f"❌ Etiket değiştirme hatası: {e}")
+                    traceback.print_exc()
+                
                 print(f"🎉 LEVEL UP! {name} -> Level {new_level}")
             
     except Exception as e:
