@@ -29,6 +29,9 @@ class ReportSystem:
         # 3 gün konuşmayanları kontrol et (her 6 saatte bir)
         schedule.every(6).hours.do(self.check_inactive_3days)
         
+        # 24 saat konuşmayanları kontrol et (her saat başı)
+        schedule.every().hour.do(self.check_inactive_24h)
+        
         thread = threading.Thread(target=run_schedule, daemon=True)
         thread.start()
         print("✅ Zamanlanmış görevler başlatıldı")
@@ -79,26 +82,43 @@ class ReportSystem:
         except Exception as e:
             print(f"❌ Haftalık rapor hatası: {e}")
     
-    def check_inactive_3days(self):
+    def check_inactive_24h(self):
+        """Her saat başı 24 saat konuşmayanları kontrol et"""
         try:
-            # 3 gün konuşmayanları kontrol et
-            three_days_ago = (datetime.datetime.now() - datetime.timedelta(days=3)).isoformat()
+            inactive_users = self.db.get_inactive_users_24h()
             
-            self.db.cursor.execute('''
-                SELECT user_id, username, first_name FROM users 
-                WHERE last_message_date < ? OR last_message_date IS NULL
-            ''', (three_days_ago,))
-            
-            inactive_users = self.db.cursor.fetchall()
-            
-            for user in inactive_users[:3]:  # Çok fazla mesaj göndermemek için
+            for user in inactive_users[:5]:  # Çok fazla mesaj göndermemek için
                 user_id, username, first_name = user
                 name = f"@{username}" if username else first_name
                 
-                invite_msg = f"🔔 {name}, 3 روژە تە نە ئاخفتنی! ها دە گروپ بە چالاک بە! 🗣️"
+                # YENİ 24 saat uyarı mesajı
+                warn_msg = f"24h🔔{name}🔔\n"
+                warn_msg += "بەرێز ٢٤ کاتژمێر بورین تە هیچ نامەیە ڤرێنەکرە \n"
+                warn_msg += "پێدفیە نامەکێ ڤرێکەی گروپی 🤝💕"
                 
-                self.bot.send_message(self.allowed_group_id, invite_msg)
-                print(f"✅ Davet gönderildi: {name}")
+                self.bot.send_message(self.allowed_group_id, warn_msg)
+                print(f"✅ 24h uyarı gönderildi: {name}")
+                
+                time.sleep(2)  # Rate limit koruması
+                
+        except Exception as e:
+            print(f"❌ 24h kontrol hatası: {e}")
+    
+    def check_inactive_3days(self):
+        """Her 6 saatte bir 3 gün konuşmayanları kontrol et"""
+        try:
+            inactive_users = self.db.get_inactive_users_3days()
+            
+            for user in inactive_users[:3]:  # Çok fazla mesaj göndermemek için
+                user_id, username, first_name, last_date = user
+                name = f"@{username}" if username else first_name
+                
+                # YENİ 3 gün uyarı mesajı
+                warn_msg = f"🔔{name}🔔\n"
+                warn_msg += "ئاگهداری ( سێ ٣ ) روژە تە نامە رێنەکری گروپی هیفیە نامەکێ ڤرێکە ئەگەر دێ هێیە دەرێخستن ❌🔕"
+                
+                self.bot.send_message(self.allowed_group_id, warn_msg)
+                print(f"✅ 3 gün uyarı gönderildi: {name}")
                 
                 time.sleep(2)  # Rate limit koruması
                 
