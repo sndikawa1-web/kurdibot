@@ -35,6 +35,14 @@ class Database:
                 (user_id, username, first_name, last_name, joined_date) 
                 VALUES (?, ?, ?, ?, ?)
             ''', (user_id, username, first_name, last_name, now))
+            
+            # İsim güncelleme (her zaman yap)
+            self.cursor.execute('''
+                UPDATE users 
+                SET username = ?, first_name = ?, last_name = ?
+                WHERE user_id = ?
+            ''', (username, first_name, last_name, user_id))
+            
             self.conn.commit()
             return True
         except Exception as e:
@@ -163,6 +171,21 @@ class Database:
             return [user for user in all_users if user[0] not in active_users]
         except Exception as e:
             print(f"❌ get_inactive_users_24h hatası: {e}")
+            return []
+    
+    def get_inactive_users_3days(self):
+        try:
+            three_days_ago = (datetime.datetime.now() - datetime.timedelta(days=3)).isoformat()
+            
+            self.cursor.execute('''
+                SELECT user_id, username, first_name, last_message_date 
+                FROM users 
+                WHERE last_message_date < ? OR last_message_date IS NULL
+            ''', (three_days_ago,))
+            
+            return self.cursor.fetchall()
+        except Exception as e:
+            print(f"❌ get_inactive_users_3days hatası: {e}")
             return []
     
     def close(self):
