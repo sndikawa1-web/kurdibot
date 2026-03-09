@@ -35,13 +35,12 @@ class BadiniTranslations:
         if not inactive_list:
             return "📊 راپورا 24 سعەتان - هەمی ئاکتیڤن 🎉"
         
-        message = "📊 راپورا 24 سعەتان - ئەو کەسێن 24 سعەتاندا نە ئاخفتین:\n\n"
+        message = "لیستا وان کەسێن نامە ڤرێنەکرین د ماوێ 24 سعەتاندا\n\n"
         for user in inactive_list:
             user_id, username, first_name = user
             name = f"@{username}" if username else first_name
             message += f"• {name}\n"
         
-        message += f"\n📊 کۆ: {len(inactive_list)} کەس"
         return message
     
     @staticmethod
