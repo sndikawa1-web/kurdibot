@@ -67,6 +67,15 @@ def get_user_display_name(user):
         return user.first_name
     return "کاربەر"
 
+def get_mention_html(user_id, username, first_name):
+    """Kullanıcıdan tıklanabilir mavi link oluştur"""
+    if username:
+        # Kullanıcı adı varsa @ ile göster (mavi olur)
+        return f"@{username}"
+    else:
+        # Kullanıcı adı yoksa first_name ile tıklanabilir link yap
+        return f"<a href='tg://user?id={user_id}'>{first_name}</a>"
+
 def truncate_tag(tag, max_length=16):
     """Etiket çok uzunsa kısalt"""
     if len(tag) > max_length:
