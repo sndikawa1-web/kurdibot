@@ -1,15 +1,19 @@
-# levels.py - TAM GÜNCEL VERSİYON (ÖZEL EMOJİLERİNİZLE)
+# levels.py - VIP/SVIP SİSTEMLİ SON VERSİYON
 from config import EMOJI_CONFIG
 
 class LevelSystem:
     def __init__(self):
         self.emoji_config = EMOJI_CONFIG
-        # ÖZEL EMOJİLERİNİZ (numaralandırdığınız gibi)
+        # ÖZEL EMOJİLERİNİZ
         self.emoji1 = "5357136605498857329"  # Baştaki ve sondaki emoji
         self.emoji2 = "5998897065613071275"  # Level yanındaki emoji
+        
+        # VIP/SVIP için özel emojiler
+        self.vip_emoji_start = "5231294849705064103"  # VIP başlangıç emojisi
+        self.vip_emoji_end = "5296642330437107668"    # VIP bitiş emojisi
     
     def get_level_title(self, level):
-        """SİZİN LEVEL ÜNVANLARINIZ"""
+        """Level 70'e kadar normal ünvanlar"""
         if 1 <= level <= 10:
             return "Diamond 💎"
         elif 11 <= level <= 19:
@@ -24,11 +28,15 @@ class LevelSystem:
             return "Myth 🔱✨"
         elif 60 <= level <= 70:
             return "King Dragon 👑🐉"
+        elif 71 <= level <= 80:
+            return f"VIP {level-70} 👑💎"  # VIP 1-10
+        elif 81 <= level <= 90:
+            return f"SVIP {level-80} ⚡👑"  # SVIP 1-10
         else:
-            return "Unknown"
+            return "MAX LEVEL 👑🔥"
     
     def get_level_tag(self, level):
-        """Level'a göre etiket (tag) döndür - Admin panelinde görünecek"""
+        """Level'a göre etiket (tag) döndür"""
         if 1 <= level <= 10:
             return "💎 Diamond"
         elif 11 <= level <= 19:
@@ -43,8 +51,12 @@ class LevelSystem:
             return "🔱✨ Myth"
         elif 60 <= level <= 70:
             return "👑🐉 King Dragon"
+        elif 71 <= level <= 80:
+            return f"VIP {level-70}"
+        elif 81 <= level <= 90:
+            return f"SVIP {level-80}"
         else:
-            return "👤 Member"
+            return "MAX LEVEL"
     
     def get_level_emoji(self, level):
         """Level'a göre config'deki emoji ID'sini döndür"""
@@ -52,58 +64,28 @@ class LevelSystem:
             return self.emoji_config[level]["emoji_id"]
         return None
     
-    def format_level_message(self, username, level, xp):
-        """Level atlama mesajı - TAM İSTEDİĞİNİZ FORMAT"""
+    def format_level_message(self, mention, level, xp):
+        """Level atlama mesajı - TIKLANABİLİR İSİMLİ"""
         title = self.get_level_title(level)
         
-        # Premium emoji HTML formatı
-        emoji1_html = f'<tg-emoji emoji-id="{self.emoji1}">⭐</tg-emoji>'
-        emoji2_html = f'<tg-emoji emoji-id="{self.emoji2}">⭐</tg-emoji>'
-        
-        # Sonraki level için gereken mesaj sayısı (level 70 için 0)
-        if level == 70:
-            messages_needed = 0
+        # Level 70'den sonra VIP/SVIP özel emojileri kullan
+        if level >= 71:
+            emoji1_html = f'<tg-emoji emoji-id="{self.vip_emoji_start}">👑</tg-emoji>'
+            emoji2_html = f'<tg-emoji emoji-id="{self.vip_emoji_end}">⭐</tg-emoji>'
         else:
-            # XP hesaplama - ULTRA ZOR level sistemi
-            if level < 11:
-                next_xp = level * 100
-            elif level < 16:
-                next_xp = 1000 + ((level - 10) * 200)
-            elif level < 21:
-                next_xp = 2000 + ((level - 15) * 300)
-            elif level < 26:
-                next_xp = 3500 + ((level - 20) * 400)
-            elif level < 31:
-                next_xp = 5500 + ((level - 25) * 500)
-            elif level < 36:
-                next_xp = 8000 + ((level - 30) * 800)
-            elif level < 41:
-                next_xp = 12000 + ((level - 35) * 1200)
-            elif level < 46:
-                next_xp = 18000 + ((level - 40) * 1800)
-            elif level < 51:
-                next_xp = 27000 + ((level - 45) * 2500)
-            elif level < 56:
-                next_xp = 39500 + ((level - 50) * 3500)
-            elif level < 61:
-                next_xp = 57000 + ((level - 55) * 5000)
-            elif level < 66:
-                next_xp = 82000 + ((level - 60) * 7000)
-            else:
-                next_xp = 117000 + ((level - 65) * 10000)
-            
-            xp_needed = next_xp - xp
-            messages_needed = max(1, (xp_needed + 9) // 10)  # Yukarı yuvarla
+            # Normal level emojileri
+            emoji1_html = f'<tg-emoji emoji-id="{self.emoji1}">⭐</tg-emoji>'
+            emoji2_html = f'<tg-emoji emoji-id="{self.emoji2}">⭐</tg-emoji>'
         
-        # TAM İSTEDİĞİNİZ FORMAT - Çizgili ve özel emojili
+        # TAM İSTEDİĞİNİZ FORMAT
         message = (
             f"━━━━━━━━━━━━━━━━━━━\n"
-            f"{emoji1_html} {username} {emoji1_html}\n"
+            f"{emoji1_html} {mention} {emoji1_html}\n"
             f"Level {emoji2_html} {level} {emoji2_html} {title}\n"
             f"━━━━━━━━━━━━━━━━━━━"
         )
         
-        return message, self.emoji1
+        return message
     
     def format_top_list(self, top_users):
         """Lider tablosu"""
