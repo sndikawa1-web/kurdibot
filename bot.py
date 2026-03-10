@@ -1,4 +1,4 @@
-# bot.py - ANA DOSYA (MAVİ ETİKETLİ SON VERSİYON)
+# bot.py - ANA DOSYA (VIP/SVIP SON VERSİYON)
 import telebot
 import os
 import time
@@ -88,7 +88,7 @@ def cmd_level(message):
             title = level_system.get_level_title(level)
             
             # Sonraki level için gereken XP
-            if level < 70:
+            if level < 90:
                 if level < 11:
                     next_xp = level * 100
                 elif level < 16:
@@ -113,11 +113,22 @@ def cmd_level(message):
                     next_xp = 57000 + ((level - 55) * 5000)
                 elif level < 66:
                     next_xp = 82000 + ((level - 60) * 7000)
-                else:
+                elif level < 71:
                     next_xp = 117000 + ((level - 65) * 10000)
+                elif level < 81:
+                    # VIP level (71-80) her biri 10000 XP
+                    next_xp = 167000 + ((level - 70) * 10000)
+                elif level < 91:
+                    # SVIP level (81-90) her biri 10000 XP
+                    next_xp = 267000 + ((level - 80) * 10000)
+                else:
+                    next_xp = 367000
                 
-                xp_needed = next_xp - xp
-                messages_needed = (xp_needed + 9) // 10
+                if level >= 90:
+                    messages_needed = 0
+                else:
+                    xp_needed = next_xp - xp
+                    messages_needed = (xp_needed + 9) // 10
             else:
                 messages_needed = 0
             
@@ -127,8 +138,10 @@ def cmd_level(message):
             msg += f"✨ **XP:** {xp}\n"
             msg += f"💬 **نامه:** {msg_count}\n"
             
-            if level < 70:
+            if level < 90:
                 msg += f"📈 **بۆ لیفلەکێ نڤ:** {messages_needed} mesaj\n"
+            else:
+                msg += f"👑 **MAX LEVEL!** 👑\n"
             
             if last_date:
                 msg += f"⏰ **دوماهیک نامە:** {last_date[:10]}"
@@ -320,15 +333,16 @@ def handle_messages(message):
         leveled_up, new_level = db.update_user_activity(user.id)
         
         if leveled_up:
-            name = get_user_display_name(user)
-            
             # Kullanıcının güncel XP'sini al
             stats = db.get_user_stats(user.id)
             if stats:
                 username, first_name, xp, level, msg_count, last_date = stats
                 
-                # YENİ FORMAT ile level atlama mesajı
-                level_msg, emoji = level_system.format_level_message(name, new_level, xp)
+                # Tıklanabilir mention oluştur
+                mention = get_mention_html(user.id, username, first_name)
+                
+                # YENİ FORMAT ile level atlama mesajı (tıklanabilir isimli)
+                level_msg = level_system.format_level_message(mention, new_level, xp)
                 
                 # Premium emoji için HTML parse_mode ile gönder
                 bot.send_message(
@@ -336,7 +350,7 @@ def handle_messages(message):
                     level_msg,
                     parse_mode='HTML'
                 )
-                print(f"🎉 LEVEL UP! {name} -> Level {new_level}")
+                print(f"🎉 LEVEL UP! {mention} -> Level {new_level}")
             
     except Exception as e:
         print(f"❌ handle_messages hatası: {e}")
