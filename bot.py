@@ -1,7 +1,8 @@
-# bot.py - ANA DOSYA (VIP/SVIP SON VERSİYON)
+# bot.py - ANA DOSYA (VIP/SVIP SİSTEMLİ + id KOMUTLU)
 import telebot
 import os
 import time
+import re
 from telebot import types
 
 from config import BOT_TOKEN, ALLOWED_GROUP_ID
@@ -132,19 +133,19 @@ def cmd_level(message):
             else:
                 messages_needed = 0
             
-            msg = f"📊 **LEVEL BİLGİLERİN**\n\n"
-            msg += f"👤 **Kullanıcı:** {mention}\n"
-            msg += f"🏆 **Level:** {level} - {title}\n"
-            msg += f"✨ **XP:** {xp}\n"
-            msg += f"💬 **نامه:** {msg_count}\n"
+            msg = f"📊 LEVEL BİLGİLERİN\n\n"
+            msg += f"👤 Kullanıcı: {mention}\n"
+            msg += f"🏆 Level: {level} - {title}\n"
+            msg += f"✨ XP: {xp}\n"
+            msg += f"💬 Mesaj: {msg_count}\n"
             
             if level < 90:
-                msg += f"📈 **بۆ لیفلەکێ نڤ:** {messages_needed} mesaj\n"
+                msg += f"📈 Sonraki levele: {messages_needed} mesaj\n"
             else:
-                msg += f"👑 **MAX LEVEL!** 👑\n"
+                msg += f"👑 MAX LEVEL! 👑\n"
             
             if last_date:
-                msg += f"⏰ **دوماهیک نامە:** {last_date[:10]}"
+                msg += f"⏰ Son mesaj: {last_date[:10]}"
             
             bot.reply_to(message, msg, parse_mode='HTML')
         else:
@@ -173,14 +174,14 @@ def cmd_stats(message):
             username, first_name, xp, level, msg_count, last_date = stats
             mention = get_mention_html(user_id, username, first_name)
             
-            msg = f"📊 **İSTATİSTİKLERİN**\n\n"
-            msg += f"👤 **Kullanıcı:** {mention}\n"
-            msg += f"💬 **Toplam Mesaj:** {msg_count}\n"
-            msg += f"🏆 **Level:** {level}\n"
-            msg += f"✨ **XP:** {xp}\n"
+            msg = f"📊 İSTATİSTİKLERİN\n\n"
+            msg += f"👤 Kullanıcı: {mention}\n"
+            msg += f"💬 Toplam Mesaj: {msg_count}\n"
+            msg += f"🏆 Level: {level}\n"
+            msg += f"✨ XP: {xp}\n"
             
             if last_date:
-                msg += f"⏰ **Son Mesaj:** {last_date[:10]}"
+                msg += f"⏰ Son Mesaj: {last_date[:10]}"
             
             bot.reply_to(message, msg, parse_mode='HTML')
         else:
@@ -213,7 +214,7 @@ def cmd_top(message):
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
             message_text += f"{medal} {mention}\n"
             message_text += f"   • Level {level} - {title}\n"
-            message_text += f"   • XP: {xp} | نامە: {msg_count}\n\n"
+            message_text += f"   • XP: {xp} | Mesaj: {msg_count}\n\n"
         
         bot.reply_to(message, message_text, parse_mode='HTML')
     except Exception as e:
@@ -290,6 +291,97 @@ def cmd_testid(message):
     except Exception as e:
         print(f"❌ testid hatası: {e}")
         bot.reply_to(message, f"❌ Hata: {e}")
+
+# === İD KOMUTU (slashsiz) ===
+@bot.message_handler(func=lambda message: message.text and message.text.lower() in ['id', 'ايدي', 'ایدی'])
+def cmd_id(message):
+    """Kullanıcı bilgilerini göster (profil fotoğraflı)"""
+    try:
+        if not is_allowed_group(message):
+            return
+        
+        user = message.from_user
+        user_id = user.id
+        
+        # Kullanıcıyı veritabanına ekle/güncelle
+        db.add_user(user_id, user.username, user.first_name, user.last_name)
+        
+        # Kullanıcı istatistiklerini al
+        stats = db.get_user_stats(user_id)
+        
+        if not stats:
+            bot.reply_to(message, "📊 İstatistik bulunamadı")
+            return
+        
+        username, first_name, xp, level, msg_count, last_date = stats
+        mention = get_mention_html(user_id, username, first_name)
+        title = level_system.get_level_title(level)
+        
+        # Kullanıcının dili (Telegram dil ayarı)
+        user_lang = user.language_code or "bilinmiyor"
+        
+        # Gruba katılma tarihi
+        db.cursor.execute('SELECT joined_date FROM users WHERE user_id = ?', (user_id,))
+        joined_result = db.cursor.fetchone()
+        joined_date = joined_result[0][:10] if joined_result and joined_result[0] else "bilinmiyor"
+        
+        # Kullanıcının bio'sunu al (varsa)
+        bio = ""
+        try:
+            user_profile = bot.get_chat(user_id)
+            if hasattr(user_profile, 'bio') and user_profile.bio:
+                bio = user_profile.bio
+                # Link ve @ işaretlerini temizle (güvenlik için)
+                # Linkleri temizle (http, https, www)
+                bio = re.sub(r'https?://\S+|www\.\S+', '[link]', bio)
+                # @ işaretlerini temizle
+                bio = re.sub(r'@\S+', '[etiket]', bio)
+            else:
+                bio = "🚫 Bio yok"
+        except:
+            bio = "🚫 Bio alınamadı"
+        
+        # Mesajı oluştur
+        caption = f"𖤓 𝐧𝐚𝐦𝐞 {mention}\n"
+        caption += f"𖤓 𝐮𝐬𝐞𝐫 @{username if username else '❌'}\n"
+        caption += f"𖤓 𝐦𝐞𝐬𝐬𝐚𝐠𝐞 {msg_count}\n"
+        caption += f"𖤓 𝐥𝐞𝐧𝐠 {user_lang}\n"
+        caption += f"𖤓 𝐭𝐢𝐦𝐞 {joined_date}\n"
+        caption += f"𖤓 𝐥𝐞𝐯𝐞𝐥 {level} - {title}\n"
+        caption += f"𖤓 𝐢𝐝 <code>{user_id}</code>\n"
+        caption += f"𖤓 𝐛𝐢𝐨 {bio}"
+        
+        # Profil fotoğrafını al ve gönder
+        try:
+            photos = bot.get_user_profile_photos(user_id, limit=1)
+            
+            if photos and photos.total_count > 0:
+                # Profil fotoğrafı var
+                file_id = photos.photos[0][-1].file_id  # En büyük boy
+                bot.send_photo(
+                    message.chat.id,
+                    file_id,
+                    caption=caption,
+                    parse_mode='HTML'
+                )
+            else:
+                # Profil fotoğrafı yok
+                bot.send_message(
+                    message.chat.id,
+                    caption,
+                    parse_mode='HTML'
+                )
+        except:
+            # Fotoğraf alınamadı
+            bot.send_message(
+                message.chat.id,
+                caption,
+                parse_mode='HTML'
+            )
+        
+    except Exception as e:
+        print(f"❌ id komutu hatası: {e}")
+        bot.reply_to(message, "❌ Bir hata oluştu")
 
 # === MESAJ İŞLEYİCİ ===
 @bot.message_handler(func=lambda message: True, content_types=['text'])
@@ -396,6 +488,7 @@ if __name__ == "__main__":
     print("   • /24h (admin)")
     print("   • /nadmin (admin)")
     print("   • /testid")
+    print("   • id, ايدي, ایدی (slashsiz)")
     print("-" * 50)
     print("🚀 Polling başlıyor...")
     print("=" * 50)
