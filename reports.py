@@ -3,6 +3,7 @@ import datetime
 import schedule
 import time
 import threading
+import pytz
 from utils import BadiniTranslations, get_iraq_time, get_mention_html
 from config import DAILY_REPORT_TIME
 
@@ -20,11 +21,17 @@ class ReportSystem:
                 schedule.run_pending()
                 time.sleep(60)
         
+        # Irak saat dilimini ayarla
+        iraq_tz = pytz.timezone('Asia/Baghdad')
+        
         # Günlük rapor (gece 00:00)
         schedule.every().day.at("00:00").do(self.send_daily_report)
         
         # Haftalık rapor (Pazartesi 00:05)
         schedule.every().monday.at("00:05").do(self.send_weekly_report)
+        
+        # Günlük en aktif 5 kişi (Irak saati 03:00)
+        schedule.every().day.at("03:00").do(self.send_daily_top_users)
         
         # 3 gün konuşmayanları kontrol et (her 6 saatte bir)
         schedule.every(6).hours.do(self.check_inactive_3days)
@@ -36,6 +43,43 @@ class ReportSystem:
         thread = threading.Thread(target=run_schedule, daemon=True)
         thread.start()
         print("✅ Zamanlanmış görevler başlatıldı")
+    
+    def send_daily_top_users(self):
+        """Günlük en aktif 5 kişiyi gönder (Irak saati 03:00)"""
+        try:
+            daily_top = self.db.get_daily_top_users(5)
+            
+            if not daily_top:
+                return
+            
+            message = "ئەو کەسێن ئەفرو ژ هەمیا پتر نامە رێکرین\n\n"
+            
+            medals = ["🥇", "🥈", "🥉", "🏅", "🎖️"]
+            
+            for i, (user_id, msg_count) in enumerate(daily_top):
+                if i >= 5:
+                    break
+                    
+                # Kullanıcı bilgilerini al
+                self.db.cursor.execute('SELECT username, first_name FROM users WHERE user_id = ?', (user_id,))
+                user_data = self.db.cursor.fetchone()
+                
+                if user_data:
+                    username, first_name = user_data
+                    mention = get_mention_html(user_id, username, first_name)
+                    message += f"{medals[i]} {mention} 🎉\n"
+            
+            message += "\nدەستخوش بەردەوامبن ب هاریکاریا وە گروپ دێ هەر اکتیڤ بت 🤝💯"
+            
+            self.bot.send_message(
+                self.allowed_group_id,
+                message,
+                parse_mode='HTML'
+            )
+            print("✅ Günlük en aktif 5 kişi gönderildi")
+            
+        except Exception as e:
+            print(f"❌ Günlük en aktif 5 kişi hatası: {e}")
     
     def send_daily_report(self):
         try:
