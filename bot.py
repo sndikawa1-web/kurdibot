@@ -1,4 +1,4 @@
-# bot.py - ANA DOSYA (SON VERSİYON)
+# bot.py - ANA DOSYA (MAVİ ETİKETLİ SON VERSİYON)
 import telebot
 import os
 import time
@@ -8,7 +8,7 @@ from config import BOT_TOKEN, ALLOWED_GROUP_ID
 from database import Database
 from levels import LevelSystem
 from reports import ReportSystem
-from utils import BadiniTranslations, get_user_display_name
+from utils import BadiniTranslations, get_user_display_name, get_mention_html
 
 # Bot'u başlat
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -84,7 +84,7 @@ def cmd_level(message):
         
         if stats:
             username, first_name, xp, level, msg_count, last_date = stats
-            name = f"@{username}" if username else first_name
+            mention = get_mention_html(user_id, username, first_name)
             title = level_system.get_level_title(level)
             
             # Sonraki level için gereken XP
@@ -122,6 +122,7 @@ def cmd_level(message):
                 messages_needed = 0
             
             msg = f"📊 **LEVEL BİLGİLERİN**\n\n"
+            msg += f"👤 **Kullanıcı:** {mention}\n"
             msg += f"🏆 **Level:** {level} - {title}\n"
             msg += f"✨ **XP:** {xp}\n"
             msg += f"💬 **نامه:** {msg_count}\n"
@@ -132,7 +133,7 @@ def cmd_level(message):
             if last_date:
                 msg += f"⏰ **دوماهیک نامە:** {last_date[:10]}"
             
-            bot.reply_to(message, msg)
+            bot.reply_to(message, msg, parse_mode='HTML')
         else:
             bot.reply_to(message, translations.error_message("no_user"))
     except Exception as e:
@@ -157,10 +158,10 @@ def cmd_stats(message):
         
         if stats:
             username, first_name, xp, level, msg_count, last_date = stats
-            name = f"@{username}" if username else first_name
+            mention = get_mention_html(user_id, username, first_name)
             
             msg = f"📊 **İSTATİSTİKLERİN**\n\n"
-            msg += f"👤 **İsim:** {name}\n"
+            msg += f"👤 **Kullanıcı:** {mention}\n"
             msg += f"💬 **Toplam Mesaj:** {msg_count}\n"
             msg += f"🏆 **Level:** {level}\n"
             msg += f"✨ **XP:** {xp}\n"
@@ -168,7 +169,7 @@ def cmd_stats(message):
             if last_date:
                 msg += f"⏰ **Son Mesaj:** {last_date[:10]}"
             
-            bot.reply_to(message, msg)
+            bot.reply_to(message, msg, parse_mode='HTML')
         else:
             bot.reply_to(message, translations.error_message("no_user"))
     except Exception as e:
@@ -184,8 +185,24 @@ def cmd_top(message):
             return
         
         top_users = db.get_top_users(10)
-        top_msg = level_system.format_top_list(top_users)
-        bot.reply_to(message, top_msg)
+        
+        if not top_users:
+            bot.reply_to(message, "🏆 لیستا ڤاله‌یه - هێچ کاربەر نینە")
+            return
+        
+        message_text = "🏆 لیستا ڕیزبه‌ندیان\n\n"
+        
+        for i, user in enumerate(top_users[:10], 1):
+            user_id, username, first_name, xp, level, msg_count = user
+            mention = get_mention_html(user_id, username, first_name)
+            title = level_system.get_level_title(level)
+            
+            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+            message_text += f"{medal} {mention}\n"
+            message_text += f"   • Level {level} - {title}\n"
+            message_text += f"   • XP: {xp} | نامە: {msg_count}\n\n"
+        
+        bot.reply_to(message, message_text, parse_mode='HTML')
     except Exception as e:
         print(f"❌ top hatası: {e}")
         bot.reply_to(message, translations.error_message("general"))
@@ -203,8 +220,18 @@ def cmd_24h(message):
             return
         
         inactive_users = db.get_inactive_users_24h()
-        report = translations.inactive_24h_report(inactive_users)
-        bot.reply_to(message, report)
+        
+        if not inactive_users:
+            bot.reply_to(message, "📊 راپورا 24 سعەتان - هەمی ئاکتیڤن 🎉")
+            return
+        
+        message_text = "لیستا وان کەسێن نامە ڤرێنەکرین د ماوێ 24 سعەتاندا\n\n"
+        for user in inactive_users:
+            user_id, username, first_name = user
+            mention = get_mention_html(user_id, username, first_name)
+            message_text += f"• {mention}\n"
+        
+        bot.reply_to(message, message_text, parse_mode='HTML')
     except Exception as e:
         print(f"❌ 24h hatası: {e}")
         bot.reply_to(message, translations.error_message("general"))
