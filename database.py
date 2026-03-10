@@ -50,7 +50,9 @@ class Database:
             return False
     
     def calculate_level_from_xp(self, xp):
-        """ULTRA ZOR level sistemi - XP'den level hesapla"""
+        """ULTRA ZOR level sistemi + VIP/SVIP"""
+        
+        # Level 1-70 arası (normal sistem)
         
         # Level 1-10 (100 XP each)
         if xp < 1000:
@@ -72,38 +74,52 @@ class Database:
         elif xp < 8000:  # 5900-7900
             return 26 + ((xp - 5500) // 500)
         
-        # Level 31-35 (800 XP each) - AŞIRI ZOR
+        # Level 31-35 (800 XP each)
         elif xp < 12000:  # 8700-11900
             return 31 + ((xp - 8000) // 800)
         
-        # Level 36-40 (1200 XP each) - ÇOK AŞIRI ZOR
+        # Level 36-40 (1200 XP each)
         elif xp < 18000:  # 13100-17900
             return 36 + ((xp - 12000) // 1200)
         
-        # Level 41-45 (1800 XP each) - İMKANSIZ
+        # Level 41-45 (1800 XP each)
         elif xp < 27000:  # 19700-26900
             return 41 + ((xp - 18000) // 1800)
         
-        # Level 46-50 (2500 XP each) - DELİLİK
+        # Level 46-50 (2500 XP each)
         elif xp < 39500:  # 29400-39400
             return 46 + ((xp - 27000) // 2500)
         
-        # Level 51-55 (3500 XP each) - ÇILGINLIK
+        # Level 51-55 (3500 XP each)
         elif xp < 57000:  # 42900-56900
             return 51 + ((xp - 39500) // 3500)
         
-        # Level 56-60 (5000 XP each) - EFSANEVİ
+        # Level 56-60 (5000 XP each)
         elif xp < 82000:  # 61900-81900
             return 56 + ((xp - 57000) // 5000)
         
-        # Level 61-65 (7000 XP each) - MİTOLOJİK
+        # Level 61-65 (7000 XP each)
         elif xp < 117000:  # 88900-116900
             return 61 + ((xp - 82000) // 7000)
         
-        # Level 66-70 (10000 XP each) - TANRISAL
-        else:
+        # Level 66-70 (10000 XP each)
+        elif xp < 167000:  # 117000-166900
             level = 66 + ((xp - 117000) // 10000)
             return min(level, 70)
+        
+        # VIP LEVELS (71-80) - Her biri 10000 XP (1000 mesaj)
+        elif xp < 267000:  # 167000-266900
+            vip_level = 71 + ((xp - 167000) // 10000)
+            return min(vip_level, 80)
+        
+        # SVIP LEVELS (81-90) - Her biri 10000 XP (1000 mesaj)
+        elif xp < 367000:  # 267000-366900
+            svip_level = 81 + ((xp - 267000) // 10000)
+            return min(svip_level, 90)
+        
+        # MAX LEVEL (90+)
+        else:
+            return 90
     
     def update_user_activity(self, user_id):
         try:
@@ -156,6 +172,26 @@ class Database:
             return self.cursor.fetchall()
         except Exception as e:
             print(f"❌ get_top_users hatası: {e}")
+            return []
+    
+    def get_daily_top_users(self, limit=5):
+        """Günlük en aktif 5 kullanıcı (Irak saati 03:00 için)"""
+        try:
+            # Son 24 saat
+            yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).isoformat()
+            
+            self.cursor.execute('''
+                SELECT user_id, COUNT(*) as msg_count 
+                FROM users 
+                WHERE last_message_date > ? 
+                GROUP BY user_id 
+                ORDER BY msg_count DESC 
+                LIMIT ?
+            ''', (yesterday, limit))
+            
+            return self.cursor.fetchall()
+        except Exception as e:
+            print(f"❌ get_daily_top_users hatası: {e}")
             return []
     
     def get_inactive_users_24h(self):
