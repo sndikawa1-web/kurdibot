@@ -314,7 +314,6 @@ def cmd_id(message):
             return
         
         username, first_name, xp, level, msg_count, last_date = stats
-        mention = get_mention_html(user_id, username, first_name)
         title = level_system.get_level_title(level)
         
         # Kullanıcının dili (Telegram dil ayarı)
@@ -325,25 +324,53 @@ def cmd_id(message):
         joined_result = db.cursor.fetchone()
         joined_date = joined_result[0][:10] if joined_result and joined_result[0] else "bilinmiyor"
         
-        # Kullanıcının bio'sunu al (varsa)
+        # Kullanıcının bio'sunu al (varsa) - LİNKLER VE @'LER TAMAMEN SİLİNECEK
         bio = ""
         try:
             user_profile = bot.get_chat(user_id)
             if hasattr(user_profile, 'bio') and user_profile.bio:
                 bio = user_profile.bio
-                # Link ve @ işaretlerini temizle (güvenlik için)
-                # Linkleri temizle (http, https, www)
-                bio = re.sub(r'https?://\S+|www\.\S+', '[link]', bio)
-                # @ işaretlerini temizle
-                bio = re.sub(r'@\S+', '[etiket]', bio)
+                
+                # Tüm linkleri ve @ işaretlerini TAMAMEN SİL
+                # http, https linkleri sil
+                bio = re.sub(r'https?://\S+', '', bio)
+                # www linkleri sil
+                bio = re.sub(r'www\.\S+', '', bio)
+                # t.me linkleri sil
+                bio = re.sub(r't\.me/\S+', '', bio)
+                # telegram.me linkleri sil
+                bio = re.sub(r'telegram\.me/\S+', '', bio)
+                # telegram.org linkleri sil
+                bio = re.sub(r'telegram\.org/\S+', '', bio)
+                # telegram.dog linkleri sil
+                bio = re.sub(r'telegram\.dog/\S+', '', bio)
+                # @ ile başlayan her şeyi sil
+                bio = re.sub(r'@\S+', '', bio)
+                
+                # Birden fazla boşluk varsa teke indir
+                bio = re.sub(r'\s+', ' ', bio)
+                
+                # Baştaki ve sondaki boşlukları temizle
+                bio = bio.strip()
+                
+                # Eğer bio tamamen boşaldıysa
+                if not bio:
+                    bio = "🚫 Bio yok"
             else:
                 bio = "🚫 Bio yok"
-        except:
+        except Exception as e:
+            print(f"❌ Bio alınamadı: {e}")
             bio = "🚫 Bio alınamadı"
         
+        # Görünen ad için tıklanabilir link hazırla (username'siz)
+        name_mention = f"<a href='tg://user?id={user_id}'>{first_name if first_name else 'İsimsiz'}</a>"
+        
+        # Kullanıcı adı (varsa @'li, yoksa ❌)
+        user_text = f"@{username}" if username else "❌"
+        
         # Mesajı oluştur
-        caption = f"𖤓 𝐧𝐚𝐦𝐞 {mention}\n"
-        caption += f"𖤓 𝐮𝐬𝐞𝐫 @{username if username else '❌'}\n"
+        caption = f"𖤓 𝐧𝐚𝐦𝐞 {name_mention}\n"
+        caption += f"𖤓 𝐮𝐬𝐞𝐫 {user_text}\n"
         caption += f"𖤓 𝐦𝐞𝐬𝐬𝐚𝐠𝐞 {msg_count}\n"
         caption += f"𖤓 𝐥𝐞𝐧𝐠 {user_lang}\n"
         caption += f"𖤓 𝐭𝐢𝐦𝐞 {joined_date}\n"
