@@ -3,7 +3,7 @@ import datetime
 import schedule
 import time
 import threading
-from utils import BadiniTranslations, get_iraq_time
+from utils import BadiniTranslations, get_iraq_time, get_mention_html
 from config import DAILY_REPORT_TIME
 
 class ReportSystem:
@@ -29,8 +29,9 @@ class ReportSystem:
         # 3 gün konuşmayanları kontrol et (her 6 saatte bir)
         schedule.every(6).hours.do(self.check_inactive_3days)
         
-        # 24 saat konuşmayanları kontrol et (her saat başı)
-        schedule.every().hour.do(self.check_inactive_24h)
+        # 24 saat konuşmayanları kontrol et (günde 2 kez: 12:00 ve 00:00)
+        schedule.every().day.at("12:00").do(self.check_inactive_24h)
+        schedule.every().day.at("00:00").do(self.check_inactive_24h)
         
         thread = threading.Thread(target=run_schedule, daemon=True)
         thread.start()
@@ -43,7 +44,8 @@ class ReportSystem:
             
             self.bot.send_message(
                 self.allowed_group_id,
-                f"📊 **RAPORA ROJANE**\n\n{report}"
+                f"📊 **RAPORA ROJANE**\n\n{report}",
+                parse_mode='HTML'
             )
             print("✅ Günlük rapor gönderildi")
         except Exception as e:
@@ -74,30 +76,42 @@ class ReportSystem:
                     user_data = self.db.get_user_stats(user_id)
                     if user_data:
                         username, first_name, xp, level, total_msgs, _ = user_data
-                        name = f"@{username}" if username else first_name
-                        message += f"{i}. {name} - {msg_count} نامە (Level {level})\n"
+                        mention = get_mention_html(user_id, username, first_name)
+                        message += f"{i}. {mention} - {msg_count} نامە (Level {level})\n"
             
-            self.bot.send_message(self.allowed_group_id, message)
+            self.bot.send_message(self.allowed_group_id, message, parse_mode='HTML')
             print("✅ Haftalık rapor gönderildi")
         except Exception as e:
             print(f"❌ Haftalık rapor hatası: {e}")
     
     def check_inactive_24h(self):
-        """Her saat başı 24 saat konuşmayanları kontrol et"""
+        """Günde 2 kez 24 saat konuşmayanları kontrol et (toplu olarak)"""
         try:
             inactive_users = self.db.get_inactive_users_24h()
             
-            for user in inactive_users[:5]:  # Çok fazla mesaj göndermemek için
-                user_id, username, first_name = user
-                name = f"@{username}" if username else first_name
+            if not inactive_users:
+                return
+            
+            # Toplu mesaj gönder (5'er 5'er)
+            for i in range(0, len(inactive_users), 5):
+                batch = inactive_users[i:i+5]
                 
-                # YENİ 24 saat uyarı mesajı
-                warn_msg = f"24h🔔{name}🔔\n"
-                warn_msg += "بەرێز ٢٤ کاتژمێر بورین تە هیچ نامەیە ڤرێنەکرە \n"
-                warn_msg += "پێدفیە نامەکێ ڤرێکەی گروپی 🤝💕"
+                message = "🔔 **24 SAAT KONUŞMAYANLAR** 🔔\n\n"
                 
-                self.bot.send_message(self.allowed_group_id, warn_msg)
-                print(f"✅ 24h uyarı gönderildi: {name}")
+                for user in batch:
+                    user_id, username, first_name = user
+                    mention = get_mention_html(user_id, username, first_name)
+                    message += f"• {mention}\n"
+                
+                message += "\nبەرێز ٢٤ کاتژمێر بورین تە هیچ نامەیە ڤرێنەکرە \n"
+                message += "پێدفیە نامەکێ ڤرێکەی گروپی 🤝💕"
+                
+                self.bot.send_message(
+                    self.allowed_group_id, 
+                    message, 
+                    parse_mode='HTML'
+                )
+                print(f"✅ 24h toplu uyarı gönderildi: {len(batch)} kişi")
                 
                 time.sleep(2)  # Rate limit koruması
                 
@@ -105,20 +119,33 @@ class ReportSystem:
             print(f"❌ 24h kontrol hatası: {e}")
     
     def check_inactive_3days(self):
-        """Her 6 saatte bir 3 gün konuşmayanları kontrol et"""
+        """Her 6 saatte bir 3 gün konuşmayanları kontrol et (toplu olarak)"""
         try:
             inactive_users = self.db.get_inactive_users_3days()
             
-            for user in inactive_users[:3]:  # Çok fazla mesaj göndermemek için
-                user_id, username, first_name, last_date = user
-                name = f"@{username}" if username else first_name
+            if not inactive_users:
+                return
+            
+            # Toplu mesaj gönder (3'er 3'er)
+            for i in range(0, len(inactive_users), 3):
+                batch = inactive_users[i:i+3]
                 
-                # YENİ 3 gün uyarı mesajı
-                warn_msg = f"🔔{name}🔔\n"
-                warn_msg += "ئاگهداری ( سێ ٣ ) روژە تە نامە رێنەکری گروپی هیفیە نامەکێ ڤرێکە ئەگەر دێ هێیە دەرێخستن ❌🔕"
+                message = "⚠️ **3 Roj Konuşmayanlar** ⚠️\n\n"
                 
-                self.bot.send_message(self.allowed_group_id, warn_msg)
-                print(f"✅ 3 gün uyarı gönderildi: {name}")
+                for user in batch:
+                    user_id, username, first_name, last_date = user
+                    mention = get_mention_html(user_id, username, first_name)
+                    message += f"• {mention}\n"
+                
+                message += "\nئاگهداری ( سێ ٣ ) روژە تە نامە رێنەکری گروپی\n"
+                message += "هیفیە نامەکێ ڤرێکە ئەگەر دێ هێیە دەرێخستن ❌🔕"
+                
+                self.bot.send_message(
+                    self.allowed_group_id, 
+                    message, 
+                    parse_mode='HTML'
+                )
+                print(f"✅ 3 gün toplu uyarı gönderildi: {len(batch)} kişi")
                 
                 time.sleep(2)  # Rate limit koruması
                 
