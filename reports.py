@@ -21,28 +21,33 @@ class ReportSystem:
                 schedule.run_pending()
                 time.sleep(60)
         
-        # Irak saat dilimini ayarla
-        iraq_tz = pytz.timezone('Asia/Baghdad')
+        # NOT: Railway UTC kullanır, Irak saati için UTC'ye çeviriyoruz
+        # Irak = UTC + 3 saat
         
-        # Günlük rapor (gece 00:00)
-        schedule.every().day.at("00:00").do(self.send_daily_report)
+        # Günlük en aktif 5 kişi (Irak saati 03:00 için UTC 00:00)
+        schedule.every().day.at("00:00").do(self.send_daily_top_users)
         
-        # Haftalık rapor (Pazartesi 00:05)
-        schedule.every().monday.at("00:05").do(self.send_weekly_report)
+        # Günlük rapor (Irak saati 00:00 için UTC 21:00 - önceki gün)
+        schedule.every().day.at("21:00").do(self.send_daily_report)
         
-        # Günlük en aktif 5 kişi (Irak saati 03:00)
-        schedule.every().day.at("03:00").do(self.send_daily_top_users)
+        # Haftalık rapor (Pazartesi Irak 00:05 için UTC 21:05 Pazar)
+        schedule.every().monday.at("21:05").do(self.send_weekly_report)
         
-        # 3 gün konuşmayanları kontrol et (her 6 saatte bir)
-        schedule.every(6).hours.do(self.check_inactive_3days)
+        # 3 gün konuşmayanları kontrol et (her 6 saatte bir - Irak saatine göre ayarlı)
+        # 03:00, 09:00, 15:00, 21:00 Irak için UTC: 00:00, 06:00, 12:00, 18:00
+        schedule.every().day.at("00:00").do(self.check_inactive_3days)  # Irak 03:00
+        schedule.every().day.at("06:00").do(self.check_inactive_3days)  # Irak 09:00
+        schedule.every().day.at("12:00").do(self.check_inactive_3days)  # Irak 15:00
+        schedule.every().day.at("18:00").do(self.check_inactive_3days)  # Irak 21:00
         
-        # 24 saat konuşmayanları kontrol et (günde 2 kez: 12:00 ve 00:00)
-        schedule.every().day.at("12:00").do(self.check_inactive_24h)
-        schedule.every().day.at("00:00").do(self.check_inactive_24h)
+        # 24 saat konuşmayanları kontrol et (günde 2 kez - Irak 12:00 ve 00:00)
+        schedule.every().day.at("09:00").do(self.check_inactive_24h)  # Irak 12:00
+        schedule.every().day.at("21:00").do(self.check_inactive_24h)  # Irak 00:00 (gece yarısı)
         
         thread = threading.Thread(target=run_schedule, daemon=True)
         thread.start()
         print("✅ Zamanlanmış görevler başlatıldı")
+        print("   📍 Irak saati için UTC ayarları yapıldı")
     
     def send_daily_top_users(self):
         """Günlük en aktif 5 kişiyi gönder (Irak saati 03:00)"""
@@ -88,7 +93,7 @@ class ReportSystem:
             
             self.bot.send_message(
                 self.allowed_group_id,
-                f"📊 **RAPORA ROJANE**\n\n{report}",
+                f"📊 RAPORA ROJANE\n\n{report}",
                 parse_mode='HTML'
             )
             print("✅ Günlük rapor gönderildi")
@@ -111,7 +116,7 @@ class ReportSystem:
             
             weekly_stats = self.db.cursor.fetchall()
             
-            message = "📅 **RAPORA HEFANE**\n\n"
+            message = "📅 RAPORA HEFANE\n\n"
             
             if not weekly_stats:
                 message += "ڤی هەفتەیی چالاکی نینە"
@@ -140,7 +145,7 @@ class ReportSystem:
             for i in range(0, len(inactive_users), 5):
                 batch = inactive_users[i:i+5]
                 
-                message = "🔔 **24 SAAT KONUŞMAYANLAR** 🔔\n\n"
+                message = "🔔 24 SAAT KONUŞMAYANLAR 🔔\n\n"
                 
                 for user in batch:
                     user_id, username, first_name = user
@@ -163,7 +168,7 @@ class ReportSystem:
             print(f"❌ 24h kontrol hatası: {e}")
     
     def check_inactive_3days(self):
-        """Her 6 saatte bir 3 gün konuşmayanları kontrol et (toplu olarak)"""
+        """Günde 4 kez 3 gün konuşmayanları kontrol et (toplu olarak)"""
         try:
             inactive_users = self.db.get_inactive_users_3days()
             
@@ -174,7 +179,7 @@ class ReportSystem:
             for i in range(0, len(inactive_users), 3):
                 batch = inactive_users[i:i+3]
                 
-                message = "⚠️ **3 Roj Konuşmayanlar** ⚠️\n\n"
+                message = "⚠️ 3 ROJ KONUŞMAYANLAR ⚠️\n\n"
                 
                 for user in batch:
                     user_id, username, first_name, last_date = user
